@@ -1,0 +1,95 @@
+# ==============================================================================
+# Dockerfile.debug — FORENSICS / POST-INCIDENT ENVIRONMENT
+# ==============================================================================
+# Stage 1 (builder): Clones from GitHub, compiles unstripped binary with debug
+#                    symbols (-g -O0). Same musl environment as prod — same binary
+#                    structure, different flags.
+# Stage 2 (runtime): debian:13-slim + full forensics toolset.
+#                    Includes the musl build environment for in-place recompilation.
+#
+# User: ROOT — forensics requires full system access:
+#         gdb attach, strace on running processes, packet capture (CAP_NET_RAW).
+#
+# Workflow: prod crashes → extract artifacts → analyze here.
+# See workshop/docs/DEV-WORKFLOW.md — "Forensics Workflow" section.
+#
+# Requires: cluar5-builder-base image (run: make build-base first)
+# Build:    make debug
+# ==============================================================================
+
+ARG BASE_IMAGE=cluar5-builder-base
+
+# --- STAGE 1: BUILDER ---
+FROM ${BASE_IMAGE} AS builder
+
+ARG REPO_URL=https://github.com/Martech-WorkShop/cluar5.git
+ARG REPO_BRANCH=main
+
+RUN git clone --depth=1 --branch ${REPO_BRANCH} ${REPO_URL} /build/app
+
+WORKDIR /build/app
+RUN mkdir -p build && make debug-static
+
+# --- STAGE 2: RUNTIME ---
+FROM debian:13-slim
+
+ARG GDB_VERSION=15.2
+ARG VALGRIND_VERSION=3.23.0
+ARG STRACE_VERSION=6.12
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LANGUAGE=C.UTF-8 \
+    TZ=UTC \
+    MUSL_PREFIX=/opt/musl
+
+# Tier 2 tools — installed from Debian apt in this container.
+# To upgrade to specific upstream versions, run: workshop/scripts/update-versions.sh
+# which will rebuild these from source using the versions in VERSIONS file.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Recompile capability
+    gcc \
+    musl-tools \
+    make \
+    git \
+    ca-certificates \
+    # Core debuggers
+    gdb \
+    valgrind \
+    strace \
+    ltrace \
+    # Network analysis
+    tcpdump \
+    netcat-openbsd \
+    # System inspection
+    procps \
+    lsof \
+    # File inspection
+    file \
+    binutils \
+    # Editors / navigation
+    vim \
+    less \
+    # Data transfer
+    curl \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the musl build environment (gsc, libgambit.a, libluajit.a, headers).
+# Required for in-place recompilation during a debugging session.
+COPY --from=builder /opt/musl /opt/musl
+
+# appuser created in builder-base — mirrored here for su / permission testing
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -m -s /bin/bash appuser
+
+WORKDIR /debug
+
+# Copy the unstripped binary (debug symbols intact — gdb can read function names)
+COPY --from=builder /build/app/build/cluar5 /debug/cluar5
+
+ENV PATH="${MUSL_PREFIX}/bin:${PATH}"
+
+# Root by design — attach debuggers, capture packets, read any process memory.
+# To test as appuser: su - appuser
+ENTRYPOINT ["/bin/bash"]

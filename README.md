@@ -1,171 +1,114 @@
-# Hybrid Core Architecture (C + Gambit + LuaJIT)
+# cluar5
 
-A high-performance, secure application architecture combining the raw speed of **C**, the safety and abstraction of **Gambit Scheme**, and the rapid prototyping capabilities of **LuaJIT**.
+**C + Lua + R5** — An LLM-native development platform where LLMs can roam freely with minimal supervision, where domain experts can architect and trust the output, and where software engineers can interact with the first layer of code easily and make adjustments without effort.
 
-## 🏗 Architecture Overview
+---
 
-This project utilizes a **"Performance-Driven Refactoring"** pipeline:
+## The philosophy
 
-1.  **Core Engine (C):** Handles the main loop, memory management, threading, signal handling, and low-level I/O drivers. Provides deterministic control and crash containment.
-2.  **Logic Engine (Gambit Scheme):** Compiles to native C for complex algorithms, state machines, parsers, and data transformation. Offers GC safety, hygienic macros, and functional abstractions without VM overhead.
-3.  **Orchestration (LuaJIT):** Handles configuration, UI binding, hot-reloadable business logic, and gluing components together. Provides instant iteration and a massive ecosystem of FFI bindings.
+Modern LLMs write excellent code. The question is not whether to trust them — it is how to *structure* that trust.
 
-### The Deployment Model
-*   **Development:** Hot-reloadable source files (`.scm`, `.lua`) interpreted at runtime for instant feedback. No recompilation needed for logic changes.
-*   **Production:** A **single statically linked binary** containing all logic. No external dependencies, no source code exposed, no interpreters needed on the host. Zero attack surface.
+cluar5 answers this with three layers, each with a distinct relationship between the human and the machine:
 
-## 📂 Project Structure
+**The Lua layer** is where humans live. Its simplicity is intentional — not a limitation but a feature. An engineer who has never seen the codebase can read a Lua file and understand what it does. Adjustments are made here. Prototypes are born here. For many projects, this layer alone is sufficient to ship a complete, working product. The LLM writes it, the human reads it, and the conversation between them happens naturally at this surface.
 
-```text
+**The Scheme layer** is where the LLM roams freely. Gambit Scheme carries the smallest surface area of any serious language ever created, yet it contains more expressive power than most engineers will ever need. This purity means the LLM makes intentional choices — there are no accidental idioms, no ambiguous constructs, almost no surface for hallucination. It is also a stealth C compiler and a stealth JavaScript compiler. Humans do not need to read it. But those who venture in will find something extraordinary.
+
+**The C layer** binds everything together. It owns the main loop, memory, I/O, and signals — the things that require determinism and performance. It is the escape hatch when Lua hits a rough edge and the bridge that Scheme requires (Gambit has no I/O by design). It is also the foundation of the platform's most important property: all three layers run in the same process, sharing memory directly, communicating at RAM speed with zero interoperability cost.
+
+The development arc is natural: prototype in Lua, move complexity to Scheme, bind performance-critical paths in C. The LLM drives all three transitions. The human steers.
+
+---
+
+## The stack
+
+| Layer | Language | Who reads it | LLM's role | Human's role |
+|---|---|---|---|---|
+| Scripts | LuaJIT | Engineers, domain experts | Writes, iterates, prototypes | Reads, adjusts, directs |
+| Logic | Gambit Scheme (R5) | Optional — brave engineers | Roams freely, expresses deeply | Architects, trusts |
+| Core | C | Engineers when needed | Binds, performs, solves | Reviews critical paths |
+
+### Why these three specifically
+
+**LuaJIT** — not Lua 5.4, not Python, not JavaScript. LuaJIT's FFI allows Lua to call C functions directly, making the Lua↔C boundary essentially free. Its syntax is minimal enough that an LLM produces it cleanly and a human reads it without friction. It is complete on its own — many projects never need to leave this layer.
+
+**Gambit Scheme** — not Racket, not Clojure, not Common Lisp. Gambit compiles directly to C, which means the Scheme layer and the C layer are not two things talking to each other — they become one binary. The R5RS standard (the smallest Scheme standard) is the constraint that makes the LLM's freedom safe: fewer constructs means fewer ways to go wrong.
+
+**C** — not Rust, not C++, not Zig. C is the language in which everything else is ultimately written. When you hit a problem in any other language, C can solve it. It has no opinion about how you use it, which means the LLM can use it exactly as the architecture requires.
+
+
+While not the main objective, at Cluar5, we're suckers for minimalism and performance, that's why we are so happy that these tools are both the best fit for LLMs and also the most performant, each in their category.
+
+Lua is the most performant interpreted language with Luajit taking it close to C performance in specific aplications. R5 Scheme is about the purest lisp there is, making it the most expressive and capable language an LLM can gracefully use. And C is the king of so many things it could take pages... so let's say it's the king of raw performance, the absolute master of raw I/O speed and the owner of the vastest low level collection of both old and cutting edge libraries.
+
+
+---
+
+## The four containers
+
+| Container | Purpose | Binary | Shell | User |
+|---|---|---|---|---|
+| `dev` | Daily development — Lua and Scheme interpreted, C compiled | gcc debug build | yes | appuser |
+| `stage` | Pre-production — identical binary to prod, test tools available | musl static | yes | appuser |
+| `prod` | Production — scratch image, single binary, nothing else | musl static, stripped | **no** | appuser |
+| `debug` | Post-incident forensics — extract from prod, analyze here | musl static, unstripped | yes | root |
+
+Production runs in a `scratch` container: no OS, no shell, no compilers, no attack surface. A single statically linked binary is the entire runtime. If it crashes, you extract the core dump and analyze it in the debug container. Production itself is never opened.
+
+---
+
+## Directory structure
+
+```
 /
-├── src/
-│   ├── main.c              # C Entry point & Main Loop
-│   ├── drivers.c           # Low-level C I/O drivers
-│   ├── core_logic.scm      # Gambit Scheme logic (Compiled to C)
-│   └── game_rules.lua      # LuaJIT scripting (Hot-reloadable)
-├── Dockerfile.stage        # Dev/Stage environment (Full toolchain)
-├── Dockerfile.prod         # Hardened Production environment (Single binary)
-├── Makefile                # Build automation
-└── README.md               # This file
+├── c/                    ← C source (core engine, main loop)
+├── lua/                  ← LuaJIT source (scripting layer — primary human surface)
+├── r5/                   ← Gambit Scheme source (logic layer — LLM's domain)
+├── .devcontainer/        ← VS Code Dev Containers configuration
+├── workshop/
+│   ├── docker/           ← All five Dockerfiles + docker-compose stub
+│   ├── scripts/          ← rename.sh, check-versions.sh, update-versions.sh
+│   ├── health/           ← Health check contract and reference implementation
+│   └── docs/             ← DEV-WORKFLOW.md, TEMPLATE-USAGE.md, CONTRIBUTING.md
+├── PROJECT.conf          ← Project name and repository URL
+├── VERSIONS              ← Pinned dependency versions
+├── Makefile              ← Build automation
+└── .gitignore
 ```
 
-## 🚀 How to Use This
+---
 
-### Prerequisites
-*   Docker & Docker Compose
-*   (Optional) Local toolchain: `gcc`, `musl-tools`, `gambit`, `luajit` (if building outside Docker)
+## Health check
 
-### 1. Development Workflow (Hot-Reload)
-Run the development container which mounts your source code and includes compilers/interpreters. Changes to `.lua` and `.scm` files are picked up instantly.
+The production container calls `/app/cluar5 --health`. This flag is implemented in `c/main.c` — C is the only layer with visibility into all runtime subsystems. The stub always returns healthy. Extend `run_health_check()` as you build your application.
 
-```bash
-# Build the dev image
-docker build -f Dockerfile.stage -t my-app-dev .
+See [workshop/health/README.md](workshop/health/README.md) for the full contract.
 
-# Run with source code mounted from your host
-docker run --rm -it \
-  -v $(pwd):/src \
-  -p 8080:8080 \
-  my-app-dev \
-  /bin/bash
+---
 
-# Inside the container:
-$ make dev-run
-# Edit .lua or .scm files on your host -> Changes reflect instantly in the running app.
-# Edit .c files -> Run 'make' to recompile the core engine.
-```
+## Dependencies
 
-### 2. Building for Production
-Create a single, static, stripped binary. This step compiles Gambit to C, links LuaJIT statically, and produces one executable file.
+| Dependency | Version | Role |
+|---|---|---|
+| LuaJIT (OpenResty fork) | see `VERSIONS` | Scripting runtime, built with musl |
+| Gambit Scheme | see `VERSIONS` | Logic compiler + runtime, built with musl |
+| musl-libc | Debian 13 (musl-tools) | Static libc for the production binary |
+| Debian 13 (Trixie) | — | Base for all containers |
 
-```bash
-# Build the production image (Multi-stage build)
-docker build -f Dockerfile.prod -t my-app-prod .
+To check for updates: `workshop/scripts/check-versions.sh`
+To update: `workshop/scripts/update-versions.sh`
 
-# (Optional) Extract the binary to run bare-metal
-docker create --name temp-container my-app-prod
-docker cp temp-container:/app/my-app ./my-app
-docker rm temp-container
-```
+---
 
-### 3. Running in Production
-Run the hardened container. It contains **only** the binary, CA certs, and timezone data. No shell, no compilers, no source code.
+## Further reading
 
-```bash
-docker run -d \
-  --name my-service \
-  --read-only \
-  --tmpfs /tmp \
-  -p 8080:8080 \
-  --cap-drop=ALL \
-  --security-opt no-new-privileges:true \
-  my-app-prod
-```
+- [workshop/docs/TEMPLATE-USAGE.md](workshop/docs/TEMPLATE-USAGE.md) — How to start a new project from this template
+- [workshop/docs/DEV-WORKFLOW.md](workshop/docs/DEV-WORKFLOW.md) — Development, staging, and forensics procedures
+- [workshop/docs/CONTRIBUTING.md](workshop/docs/CONTRIBUTING.md) — How to contribute to the template itself
+- [workshop/health/README.md](workshop/health/README.md) — Health check contract
 
-## 🔒 Security Features
+---
 
-*   **Single Binary:** No external library dependencies (`libc` is statically linked via `musl`).
-*   **No Source Code:** Production image contains zero `.c`, `.scm`, or `.lua` files. Logic is embedded as bytecode or machine code.
-*   **Non-Root:** Runs as an unprivileged user (`appuser`).
-*   **Hardened Container:** Designed to be run with `--cap-drop=ALL`, read-only filesystem, and no-new-privileges.
-*   **Minimal Base:** Built on `debian:13-slim` with aggressive package stripping. No shells or package managers in the final runtime path.
+## License
 
-## 🛠 Tech Stack
-
-*   **Languages:** C (Core), Gambit Scheme (Logic), LuaJIT (Scripting)
-*   **OS:** Debian 13 (Trixie)
-*   **Linking:** Static (musl-libc) for portability and minimalism
-*   **Containerization:** Docker (Multi-stage builds)
-*   **Philosophy:** Performance-Driven Refactoring (Start in Lua, move to Gambit/C only when needed)
-
-## 📝 License
 MIT
-
-
-
-
-Here is the final, definitive setup.
-
-**Philosophy:**
-1.  **Production (`Dockerfile.prod`):** A **locked box**. Contains **only** the binary and CA certs. **No shell**, no `bash`, no `curl`, no `ls`. If it crashes, you cannot touch it inside. You **must** extract artifacts to analyze them.
-2.  **Staging (`Dockerfile.stage` or your local dev env):** The **workshop**. Contains **everything** (`gdb`, `vim`, `bash`, `gcc`, `strace`). This is where you bring the extracted artifacts to perform forensics.
-
----
-
-### 1. Production Dockerfile (`Dockerfile.prod`)
-*Target: Maximum Security. No interactive access.*
-
----
-
-### 2. Staging / Forensics Environment
-*Target: Full Visibility. Use your existing `Dockerfile.stage` or a specific debug build.*
-
-You don't need a new file. Just ensure your Staging image has:
-*   `gdb`, `valgrind`, `strace`
-*   `vim`, `bash`, `curl`, `wget`
-*   `gcc`, `make`
-*   **Unstripped binary** (Compile with `-g` flag instead of `strip`).
-
-**The Forensics Workflow (When Prod Crashes):**
-
-1.  **Extract Artifacts from Prod:**
-    ```bash
-    # Create a local folder for the autopsy
-    mkdir -p ./forensics
-
-    # Pull the binary (exact match)
-    docker cp my-app-prod:/app/my-app ./forensics/my-app
-
-    # Pull the core dump (assuming ulimit was set)
-    docker cp my-app-prod:/tmp/core ./forensics/core.dump
-
-    # Pull logs
-    docker cp my-app-prod:/var/log/app ./forensics/logs
-    ```
-
-2.  **Analyze in Staging (or Local):**
-    Run your Staging container (which has all tools) and mount the forensics folder.
-    ```bash
-    docker run -it --rm \
-      -v $(pwd)/forensics:/data \
-      my-app-staging \
-      /bin/bash
-    ```
-    *Inside Staging:*
-    ```bash
-    cd /data
-    gdb ./my-app core.dump
-    # Now you have full power to debug.
-    ```
-
-### Summary of Differences
-
-| Feature | Production (`scratch`) | Staging (`debian:13-slim` + Tools) |
-| :--- | :--- | :--- |
-| **Base Image** | `scratch` (Empty) | `debian:13-slim` |
-| **Shell** | **None** | `bash` |
-| **Tools** | **None** | `gdb`, `vim`, `curl`, `strace`, etc. |
-| **Binary** | Stripped (Small, Hard to reverse) | Unstripped (Debug symbols included) |
-| **Access** | **Impossible** (`docker exec` fails) | Full Root Access |
-| **Purpose** | Run securely, dump core on crash | Analyze the core dump, fix bugs |
-

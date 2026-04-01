@@ -1,0 +1,46 @@
+{
+    "name": "cluar5-dev",
+    "build": {
+        "dockerfile": "../workshop/docker/Dockerfile.dev",
+        "context": ".."
+    },
+    "workspaceFolder": "/app",
+    "remoteUser": "appuser",
+
+    // Fires once after the container and workspace are ready.
+    // Detects a fresh template clone and runs the rename wizard if needed.
+    "postCreateCommand": "bash /app/workshop/scripts/rename.sh",
+
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                // C/C++
+                "ms-vscode.cpptools",
+                "ms-vscode.cmake-tools",
+                // Lua
+                "sumneko.lua",
+                // Git
+                "eamodio.gitlens"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "bash",
+                "editor.formatOnSave": false,
+                "files.trimTrailingWhitespace": true,
+                "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+                "C_Cpp.default.includePath": [
+                    "${workspaceFolder}/c",
+                    "/usr/include/luajit-2.1"
+                ]
+            }
+        }
+    },
+
+    // Forward ports your application exposes during development.
+    // Uncomment and adjust to match your application.
+    // "forwardPorts": [8080],
+
+    // Mount the build output directory so binaries persist across rebuilds.
+    "mounts": [
+        "source=cluar5-build,target=/app/build,type=volume"
+    ]
+}

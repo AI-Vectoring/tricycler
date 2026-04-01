@@ -1,0 +1,51 @@
+# ==============================================================================
+# Dockerfile.dev — DEVELOPMENT ENVIRONMENT
+# ==============================================================================
+# Base: debian:13 (full, glibc) — best tool support, gdb works perfectly here.
+# Goal: Fast iteration. Scheme and Lua run via interpreters (no compile step).
+#       C is compiled with gcc (debug build, dynamically linked, not stripped).
+#
+# Source: VS Code "Clone Repository in Container Volume" clones from GitHub
+#         directly into a Docker volume and mounts it into this container.
+#         There are no local files to copy — edit inside the container via VS Code.
+#
+# User: appuser (non-root) — mirrors production to catch permission bugs early.
+# ==============================================================================
+
+FROM debian:13
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LANGUAGE=C.UTF-8 \
+    TZ=UTC
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # C toolchain (debug builds — no musl, no static linking in dev)
+    gcc \
+    make \
+    cmake \
+    pkg-config \
+    # Gambit Scheme — interpreter + dev headers
+    gambc \
+    # LuaJIT — interpreter + dev headers
+    luajit \
+    libluajit-5.1-dev \
+    # Version control
+    git \
+    # Network/TLS
+    ca-certificates \
+    curl \
+    # Editors (lightweight, for quick edits inside the container)
+    vim \
+    nano \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -m -s /bin/bash appuser
+
+WORKDIR /app
+RUN chown -R appuser:appuser /app
+
+USER appuser
+
+ENTRYPOINT ["/bin/bash"]

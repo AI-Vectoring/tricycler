@@ -1,0 +1,22 @@
+# Build output
+build/
+
+# Gambit generated C files
+r5/*_bundle.c
+
+# Editor
+.vscode/settings.json
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+*.tar
+
+# Secrets — never commit these
+.env
+*.pem
+*.key

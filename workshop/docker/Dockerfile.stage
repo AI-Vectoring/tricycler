@@ -1,0 +1,74 @@
+# ==============================================================================
+# Dockerfile.stage — STAGING ENVIRONMENT
+# ==============================================================================
+# Stage 1 (builder): Clones from GitHub, compiles the same static binary as prod.
+#                    Identical flags, identical musl environment. No shortcuts.
+# Stage 2 (runtime): debian:13-slim + full build toolchain + integration test tools.
+#                    Binary is NOT stripped — stack traces are readable.
+#
+# User: appuser by default (mirrors prod behavior exactly).
+#       Shell is present — escalate to root via 'su' when needed.
+#       Full toolchain is available — recompile in-place without leaving the container.
+#
+# Requires: cluar5-builder-base image (run: make build-base first)
+# Build:    make stage
+# ==============================================================================
+
+ARG BASE_IMAGE=cluar5-builder-base
+
+# --- STAGE 1: BUILDER ---
+FROM ${BASE_IMAGE} AS builder
+
+ARG REPO_URL=https://github.com/Martech-WorkShop/cluar5.git
+ARG REPO_BRANCH=main
+
+RUN git clone --depth=1 --branch ${REPO_BRANCH} ${REPO_URL} /build/app
+
+WORKDIR /build/app
+RUN mkdir -p build && make stage-static
+
+# --- STAGE 2: RUNTIME ---
+FROM debian:13-slim
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    LANGUAGE=C.UTF-8 \
+    TZ=UTC \
+    MUSL_PREFIX=/opt/musl
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Recompile capability (use the musl libs copied from builder, not apt gambc/luajit)
+    gcc \
+    musl-tools \
+    make \
+    git \
+    ca-certificates \
+    # Integration testing tools
+    curl \
+    wget \
+    netcat-openbsd \
+    jq \
+    bash \
+    procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy the musl build environment from builder (gsc, libgambit.a, libluajit.a, headers).
+# This allows recompiling the binary inside stage without rebuilding from source.
+COPY --from=builder /opt/musl /opt/musl
+
+RUN groupadd -g 1000 appuser && \
+    useradd -u 1000 -g appuser -m -s /bin/bash appuser
+
+WORKDIR /app
+
+# Copy the stage binary (not stripped, readable stack traces)
+COPY --from=builder /build/app/build/cluar5 /app/cluar5
+
+RUN chown -R appuser:appuser /app
+
+ENV PATH="${MUSL_PREFIX}/bin:${PATH}"
+
+# Run as appuser — same as prod. Use 'su' to escalate when needed.
+USER appuser
+
+ENTRYPOINT ["/bin/bash"]

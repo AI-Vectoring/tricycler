@@ -1,0 +1,60 @@
+# ==============================================================================
+# Dockerfile.prod — PRODUCTION ENVIRONMENT
+# ==============================================================================
+# Stage 1 (builder): Clones from GitHub, compiles stripped static binary with musl.
+#                    -O2 optimized, -s stripped, zero debug symbols.
+# Stage 2 (runtime): scratch — contains ONLY:
+#                      /app/cluar5          (the binary)
+#                      /etc/ssl/certs/      (CA certificates for HTTPS)
+#                      /usr/share/zoneinfo/ (timezone data)
+#                      /etc/passwd          (so USER appuser resolves)
+#
+# No shell. No compilers. No package manager. No editors.
+# If it crashes, extract artifacts and analyze in the debug container.
+# See workshop/docs/DEV-WORKFLOW.md — "Forensics Workflow" section.
+#
+# Requires: cluar5-builder-base image (run: make build-base first)
+# Build:    make prod
+# ==============================================================================
+
+ARG BASE_IMAGE=cluar5-builder-base
+
+# --- STAGE 1: BUILDER ---
+FROM ${BASE_IMAGE} AS builder
+
+ARG REPO_URL=https://github.com/Martech-WorkShop/cluar5.git
+ARG REPO_BRANCH=main
+
+RUN git clone --depth=1 --branch ${REPO_BRANCH} ${REPO_URL} /build/app
+
+WORKDIR /build/app
+RUN mkdir -p build && make prod-static
+
+# --- STAGE 2: RUNTIME ---
+FROM scratch
+
+# Binary
+COPY --from=builder /build/app/build/cluar5 /app/cluar5
+
+# CA certificates (required for any outbound HTTPS calls)
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+# Timezone data (required if the application formats local times)
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
+
+# Minimal passwd so USER appuser resolves (appuser created in builder-base)
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    TZ=UTC
+
+USER appuser
+
+# Health check uses the --health flag implemented in c/main.c.
+# See workshop/health/README.md for the contract and how to extend it.
+HEALTHCHECK --interval=300s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/app/cluar5", "--health"]
+
+ENTRYPOINT ["/app/cluar5"]

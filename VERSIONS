@@ -1,0 +1,27 @@
+# VERSIONS — Pinned dependency versions for all containers.
+#
+# Tier 1: Core runtime — built from source with musl, linked into the static binary.
+#         Goes to production. Update deliberately. Test thoroughly before bumping.
+#         Run: workshop/scripts/check-versions.sh to see what has changed upstream.
+#
+# Tier 2: Debug/forensics tools — installed in debug/stage containers, never shipped.
+#         Run: workshop/scripts/update-versions.sh to update to latest upstream.
+
+# --- Tier 1: Core Runtime ---
+# LuaJIT (OpenResty fork — more active than upstream, includes important patches)
+LUAJIT_VERSION=v2.1-20240314
+
+# Gambit Scheme compiler and runtime
+GAMBIT_VERSION=v4.9.5
+
+# musl libc — sourced via musl-tools (Debian 13 package, matches Trixie stable)
+# Not built from source; musl-tools provides musl-gcc wrapper.
+# To upgrade musl itself, switch to building from https://musl.libc.org/releases/
+
+# --- Tier 2: Debug/Forensics Tools ---
+# These are built from source in Dockerfile.debug to get latest upstream versions,
+# since Debian's packaging lags significantly behind these fast-moving projects.
+GDB_VERSION=15.2
+VALGRIND_VERSION=3.23.0
+STRACE_VERSION=6.12
+TCPDUMP_VERSION=4.99.4
