@@ -1,4 +1,4 @@
-# Cluar5: a stack designed around LLM coders. 
+# Cluar5: Free the full potential of LLM coders. 
 
 The first paradigm where LLM capabilities, preferences, advantages, and caveats are the main consideration for every decision.
 
@@ -8,7 +8,7 @@ You concentrate on the architecture, the intent, the outcomes, and the taste.
 Our job as software engineers has switched from producers of code to designers of outcomes and experiences. Give the LLMs greater freedom, exploit more of their potential and focus in the quality.
 
 
-# Free the full potential of LLM coders.
+# A stack designed around LLM coders.
 
 Cluar5 is designed to minimize the surface for mistakes, hallucinations and avoids most of the language traps of popular languages by focusing in the languages LLMs work best with.
 
