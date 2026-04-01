@@ -1,4 +1,4 @@
-# Cluar5, a stack designed around LLM coders. 
+# Cluar5: a stack designed around LLM coders. 
 
 The first paradigm where LLM capabilities, preferences, advantages, and caveats are the main consideration for every decision.
 
@@ -8,7 +8,7 @@ You concentrate on the architecture, the intent, the outcomes, and the taste.
 Our job as software engineers has switched from producers of code to designers of outcomes and experiences. Give the LLMs greater freedom, exploit more of their potential and focus in the quality.
 
 
-# Free the full potential of LLM coders with Cluar5.
+# Free the full potential of LLM coders.
 
 Cluar5 is designed to minimize the surface for mistakes, hallucinations and avoids most of the language traps of popular languages by focusing in the languages LLMs work best with.
 
@@ -16,7 +16,6 @@ Cluar5 is designed to minimize the surface for mistakes, hallucinations and avoi
 
 **Cluar5 is not just a poliglot asembly, it's 3 different views of the world, running in parallel, sharing everything in RAM.**
 
----
 
 ## The philosophy
 
@@ -25,20 +24,38 @@ SotA LLMs write great code. Give them a surface where they can both feel safe an
 Cluar5 provides this surface with three carefuly selected layers, each with a distinct relationship between the LLM, the code, and the human architect:
 The languages are not chosen because they are popular, smart, unique or special, they are chosen because they are minimal, especially minimal from the perspective of an LLM.
 
-**The Lua layer** is where fast prototypes can be created effortlesly. Its simplicity is its strongest benefit, engineers can read a Lua file and understand what it does immediately.
+**The Lua layer**
+is where fast prototypes can be created effortlesly. Its simplicity is its strongest benefit, engineers can read a Lua file and understand what it does immediately.
 LLMs can write Lua code easely because it lacks the complexity of most fully fledged languages. Yet is is tourin complete and fully capable of full size complex apps.
 
 Prototypes are born here. For many projects, this layer alone is sufficient to ship a complete, working product. The LLM writes it, the human reads it, and the conversation between them happens naturally at this surface.
 
 There is no better spec than a working app. Once the code is functional, it is up to you, the architect and director to choose any parts that mighr benefit from greater expresiveness, require additional complexity or simply require maximum poerformance, those parts can then be migrated to the R5 layer or the C layer accordingly.
 
-**The R5 layer** Gambit Scheme is where the LLM roams freely. R5 carries the smallest surface area of any serious language ever created, yet it contains more expressive power than any other language, all within an ultra safe universe. The purity and expresiveness means the LLM makes intentional choices — there are no accidental idioms, no ambiguous constructs, almost no surface for hallucination.
+**The R5 layer**
+Gambit Scheme is where the LLM roams freely. R5RS carries the smallest surface area of any serious language ever created, yet it contains more expressive power than any other language, all within an LLM-ultra-safe-universe. The purity from the lack of I/O and the "S-expresiveness" means the LLM makes intentional choices — there are no accidental idioms, no ambiguous constructs, almost no surface for hallucination.
 
-**The C layer** The binding agent that puuls everything together. It owns the main loop, memory, I/O, and signals, all things requiring determinism and performance. It acts as the escape hatch when Lua hits a rough edge and as the bridge that Scheme requires to talk to the real world (Gambit has no I/O by design). Most importantly: it ties the three layers in one single process, sharing memory directly, communicating at RAM speed with zero interoperability cost.
+** Gambit Scheme's *REPL MAGIC* **
+All languages have a REPL... right? Yes, but not really...
+The Lisp REPL is a direct window into the live runtime, allowing programmers and LLMs to redefine functions, classes, and variables on the fly while the program is running. You can modify the program as it runs and see what happens as it happens, a fully interactive, incremental Read-Eval-Print Loop (REPL) that is fundamentally built around "homoiconicity", where code is treated as data, allowing for live, in-memory modification of a running program.
+This isn't a development tool. This is the runtime itself becoming the interface.
+The LLM is not writing code and submitting it for review. The LLM is inside the process. It modifies a function — the modification is live, instantly, the program never stopped. It observes the effect. It modifies again. It is having a conversation with a running system, in real time, in the language of that system.
+
+This is what Lisp was designed for. NASA used it on the Deep Space 1 probe, they patched a bug in a spacecraft that was 100 million miles away, on a live running system, via exactly this mechanism. The program never stopped. The fix went in while the mission was in progress...
+Cluar5 brings this to LLM-native development (experimental).
+
+
+The LLM is not writing code and submitting it for review. The LLM is inside the process. It modifies a function — the modification is live, instantly, the program never stopped. It observes the effect. It modifies again. It is having a conversation with a running system, in real time, in the language of that system.
+
+This is what Lisp was designed for. NASA used it on the Deep Space 1 probe — they patched a bug in a spacecraft that was 100 million miles away, on a live running system, via exactly this mechanism. The program never stopped. The fix went in while the mission was in progress.
+
+CLuaR5 brings this to LLM-native development (Experimental).
+
+
+**The C layer**
+The binding agent that puuls everything together. It owns the main loop, memory, I/O, signals, and all things requiring determinism and raw performance. It acts as the escape hatch when Lua hits a rough edge and as the bridge that Scheme requires to talk to the real world (Gambit has no I/O by design). Most importantly: it ties the three layers in one single process, sharing memory directly, communicating at RAM speed with zero interoperability cost.
 
 The development arc is natural: prototype in Lua, move complexity to Scheme, bind performance-critical paths in C. The LLM drives all three transitions. The human steers.
-
- It is also a stealth C compiler and a stealth JavaScript compiler. Humans do not need to read it. But those who venture in will find something extraordinary.
 
 
 ---
