@@ -17,14 +17,14 @@ Cluar5 is designed to minimize the surface for mistakes, hallucinations and avoi
 **Cluar5 is not just a poliglot asembly, it's 3 different views of the world, running in parallel, sharing everything in RAM.**
 
 
-## The philosophy
+## The philosophy:
 
 SotA LLMs write great code. Give them a surface where they can both feel safe and express themselves more freely and whatch them reward you with their best output.
 
 Cluar5 provides this surface with three carefuly selected layers, each with a distinct relationship between the LLM, the code, and the human architect:
 The languages are not chosen because they are popular, smart, unique or special, they are chosen because they are minimal, especially minimal from the perspective of an LLM.
 
-## The stack
+## The stack:
 
 **The Lua layer**
 is where fast prototypes can be created effortlesly. Its simplicity is its strongest benefit, engineers can read a Lua file and understand what it does immediately.
