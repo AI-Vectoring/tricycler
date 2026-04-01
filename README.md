@@ -1,28 +1,45 @@
-# cluar5
+# Cluar5, a stack designed around LLM coders. 
 
-*cluar5 is the first stack designed around LLM coders — the first paradigm where LLM capabilities, preferences, advantages, and caveats are the main consideration for every decision.
+The first paradigm where LLM capabilities, preferences, advantages, and caveats are the main consideration for every decision.
 
 LLMs have finally claimed ownership of the coding skill, yet we still force them to code in our preferred languages, using our beloved frameworks and the existing libraries we are comfortable with.
 
-Free the full potential of LLM coders with cluar5.*
+You concentrate on the architecture, the intent, the outcomes, and the taste.
+Our job as software engineers has switched from producers of code to designers of outcomes and experiences. Give the LLMs greater freedom, exploit more of their potential and focus in the quality.
 
-C + Lua + R5** — An LLM-native development platform where LLMs can roam freely with minimal supervision, where domain experts can architect and trust the output, and where software engineers can interact with the first layer of code easily and make adjustments without effort.
+
+# Free the full potential of LLM coders with Cluar5.
+
+Cluar5 is designed to minimize the surface for mistakes, hallucinations and avoids most of the language traps of popular languages by focusing in the languages LLMs work best with.
+
+**C + Lua + R5** — An LLM-first environment where LLMs can roam freely with minimal supervision, where domain experts can architect and trust the output (for the most part :-), and where software engineers can interact with the first layer of code easily and make adjustments without effort.
+
+**Cluar5 is not just a poliglot asembly, it's 3 different views of the world, running in parallel, sharing everything in RAM.**
 
 ---
 
 ## The philosophy
 
-Modern LLMs write excellent code. The question is not whether to trust them — it is how to *structure* that trust.
+SotA LLMs write great code. Give them a surface where they can both feel safe and express themselves more freely and whatch them reward you with their best output.
 
-cluar5 answers this with three layers, each with a distinct relationship between the human and the machine:
+Cluar5 provides this surface with three carefuly selected layers, each with a distinct relationship between the LLM, the code, and the human architect:
+The languages are not chosen because they are popular, smart, unique or special, they are chosen because they are minimal, especially minimal from the perspective of an LLM.
 
-**The Lua layer** is where humans live. Its simplicity is intentional — not a limitation but a feature. An engineer who has never seen the codebase can read a Lua file and understand what it does. Adjustments are made here. Prototypes are born here. For many projects, this layer alone is sufficient to ship a complete, working product. The LLM writes it, the human reads it, and the conversation between them happens naturally at this surface.
+**The Lua layer** is where fast prototypes can be created effortlesly. Its simplicity is its strongest benefit, engineers can read a Lua file and understand what it does immediately.
+LLMs can write Lua code easely because it lacks the complexity of most fully fledged languages. Yet is is tourin complete and fully capable of full size complex apps.
 
-**The Scheme layer** is where the LLM roams freely. Gambit Scheme carries the smallest surface area of any serious language ever created, yet it contains more expressive power than most engineers will ever need. This purity means the LLM makes intentional choices — there are no accidental idioms, no ambiguous constructs, almost no surface for hallucination. It is also a stealth C compiler and a stealth JavaScript compiler. Humans do not need to read it. But those who venture in will find something extraordinary.
+Prototypes are born here. For many projects, this layer alone is sufficient to ship a complete, working product. The LLM writes it, the human reads it, and the conversation between them happens naturally at this surface.
 
-**The C layer** binds everything together. It owns the main loop, memory, I/O, and signals — the things that require determinism and performance. It is the escape hatch when Lua hits a rough edge and the bridge that Scheme requires (Gambit has no I/O by design). It is also the foundation of the platform's most important property: all three layers run in the same process, sharing memory directly, communicating at RAM speed with zero interoperability cost.
+There is no better spec than a working app. Once the code is functional, it is up to you, the architect and director to choose any parts that mighr benefit from greater expresiveness, require additional complexity or simply require maximum poerformance, those parts can then be migrated to the R5 layer or the C layer accordingly.
+
+**The R5 layer** Gambit Scheme is where the LLM roams freely. R5 carries the smallest surface area of any serious language ever created, yet it contains more expressive power than any other language, all within an ultra safe universe. The purity and expresiveness means the LLM makes intentional choices — there are no accidental idioms, no ambiguous constructs, almost no surface for hallucination.
+
+**The C layer** The binding agent that puuls everything together. It owns the main loop, memory, I/O, and signals, all things requiring determinism and performance. It acts as the escape hatch when Lua hits a rough edge and as the bridge that Scheme requires to talk to the real world (Gambit has no I/O by design). Most importantly: it ties the three layers in one single process, sharing memory directly, communicating at RAM speed with zero interoperability cost.
 
 The development arc is natural: prototype in Lua, move complexity to Scheme, bind performance-critical paths in C. The LLM drives all three transitions. The human steers.
+
+ It is also a stealth C compiler and a stealth JavaScript compiler. Humans do not need to read it. But those who venture in will find something extraordinary.
+
 
 ---
 
