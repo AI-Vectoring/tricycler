@@ -61,6 +61,9 @@ check "LuaJIT is Lua 5.1 compatible (no math.type)" \
 # ── Gambit Scheme ─────────────────────────────────────────────────────────────
 section "Gambit Scheme"
 
+# WHY -e: piping to gsi (e.g. echo '(expr)' | gsi) opens the interactive REPL,
+# which wraps output in prompts ("> 42> *** EOF again to exit"). The -e flag
+# evaluates the expression non-interactively and prints only the result.
 check "gsi evaluates expression" \
   "42" \
   "$(dev_run 'gsi -e "(display (* 6 7)) (newline)"')"
@@ -128,6 +131,9 @@ check "HTTP/3 (QUIC) correctly absent" \
 H2O_TMPDIR=$(make_tmpdir)
 echo "h2o_serve_ok" > "${H2O_TMPDIR}/index.txt"
 cat > "${H2O_TMPDIR}/h2o.conf" << 'CONF'
+# REQUIRED: 'listen' is mandatory in H2O 2.3.x+. Older docs and examples omit
+# it and assume a default port, but this build (built from master, 2026-04-02)
+# exits with error 78 if 'listen' is absent. Always include it explicitly.
 listen:
   host: 127.0.0.1
   port: 7080
@@ -138,6 +144,14 @@ hosts:
         file.dir: /tmp/www
 CONF
 
+# WHY -m worker:
+#   H2O's default mode is 'daemon' — it forks a child process and the parent
+#   exits immediately. When run inside a container test, the daemonized child
+#   loses its stdin/stdout context and curl gets connection refused.
+#   'daemon: OFF' config key does NOT exist in this build (exits with
+#   "unknown command: daemon"). The correct fix is '-m worker', which keeps
+#   the invoked process in the foreground as the actual request handler.
+#   Background it with '&' so we can curl it from the same shell.
 H2O_RESULT=$(docker run --rm \
   -v "${H2O_TMPDIR}:/tmp/www:ro" \
   -v "${H2O_TMPDIR}/h2o.conf:/tmp/h2o.conf:ro" \

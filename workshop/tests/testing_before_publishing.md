@@ -48,9 +48,13 @@ bash workshop/tests/test-compose.sh
 
 All scripts must be run from the **repository root**.
 
-Images are built automatically before testing. To skip the build (if the image is already up to date):
+Images are built automatically before testing. **Do not skip the build before publishing** — `SKIP_BUILD=1` tests whatever image is currently in Docker's cache, which may be stale if a Dockerfile was changed. Only use it when you are certain the image is up to date (e.g. running tests a second time in the same session with no Dockerfile changes):
 ```bash
+# Safe: images were just built, no Dockerfile changes since
 SKIP_BUILD=1 bash workshop/tests/test-dev.sh
+
+# NOT safe before publishing — always rebuild first:
+bash workshop/tests/run-all.sh
 ```
 
 ---
@@ -105,6 +109,28 @@ Tests the docker-compose setup:
 3. `pg_isready` confirms the server accepts connections
 4. Data written to the database persists across container recreation (`docker compose down` + `up`)
 5. Cleanup (volumes removed after test)
+
+---
+
+## Discoveries Made During Test Development
+
+These are things that differed from documentation or reasonable assumptions. They are recorded here so future agents and developers do not "fix" the correct code back to broken.
+
+### H2O: `listen` directive is mandatory
+
+Older H2O documentation and examples show configs without a `listen` directive, implying a default port. In this build (master, 2026-04-02), H2O exits with error 78 and the message `mandatory configuration directive 'listen' does not exist` if it is absent. Always include `listen:` explicitly.
+
+### H2O: use `-m worker`, not daemon mode
+
+H2O's default run mode is `daemon` — the invoked process forks a child server and exits. Inside a container test script, this makes it impossible to tell when the server is ready and the daemonized child loses its output context, causing `curl` to get connection refused.
+
+The `daemon: OFF` config key does **not** exist in this build — H2O exits with `unknown command: daemon` if you try it.
+
+The correct approach: run `h2o -m worker -c config.conf &` in the test. The `-m worker` flag keeps the process in the foreground (handling connections directly), so backgrounding with `&` is controlled and the PID is reliable.
+
+### Gambit `gsi`: use `-e` flag for scripted evaluation
+
+Piping Scheme code to `gsi` via stdin (e.g. `echo '(display 42)' | gsi`) opens the interactive REPL, which wraps every output line in prompts: `> 42> *** EOF again to exit`. This makes output comparison impossible. Use `gsi -e "(expression)"` for non-interactive evaluation.
 
 ---
 

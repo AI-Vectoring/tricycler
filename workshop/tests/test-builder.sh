@@ -70,6 +70,9 @@ check "gsc is executable" \
   "0" \
   "$(builder_run 'test -x /opt/musl/bin/gsc && echo 0 || echo 1')"
 
+# WHY -e: piping to gsi (e.g. echo '(expr)' | gsi) opens the interactive REPL,
+# which wraps output in prompts ("> 7> *** EOF again to exit"). Use -e to
+# evaluate non-interactively.
 check "gsc evaluates Scheme" \
   "7" \
   "$(builder_run '/opt/musl/bin/gsi -e "(display (+ 3 4)) (newline)"')"
