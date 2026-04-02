@@ -22,6 +22,7 @@ ENV LANG=C.UTF-8 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # C toolchain (debug builds — no musl, no static linking in dev)
     gcc \
+    g++ \
     make \
     cmake \
     pkg-config \
@@ -55,6 +56,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zlib1g-dev \
     libyaml-dev \
     && rm -rf /var/lib/apt/lists/*
+
+# --- Build H2O HTTP server from source ---
+# H2O has no release tags since 2019; master is the recommended source.
+# HTTP/3 (QUIC) requires quictls/BoringSSL — deferred. This build: HTTP/1.x + HTTP/2 only.
+# -DWITH_MRUBY=OFF: skip mruby scripting engine (requires ruby+bison, not needed here).
+ARG H2O_COMMIT=77288edcfbed39faa2db47160d2c98915bdbd0c1
+
+RUN git clone https://github.com/h2o/h2o.git /tmp/h2o && \
+    cd /tmp/h2o && \
+    git checkout ${H2O_COMMIT} && \
+    mkdir build && cd build && \
+    cmake -DCMAKE_INSTALL_PREFIX=/usr/local \
+          -DWITH_MRUBY=OFF \
+          .. && \
+    make -j$(nproc) && \
+    make install && \
+    rm -rf /tmp/h2o
 
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -m -s /bin/bash appuser
