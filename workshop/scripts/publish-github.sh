@@ -9,7 +9,7 @@
 # Run from repo root:
 #   bash workshop/scripts/publish-github.sh
 
-set -uo pipefail
+set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 BLUE='\033[0;34m'

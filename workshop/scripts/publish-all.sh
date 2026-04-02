@@ -11,7 +11,7 @@
 # Run from repo root:
 #   bash workshop/scripts/publish-all.sh
 
-set -uo pipefail
+set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 source PROJECT.conf
 
