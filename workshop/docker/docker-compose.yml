@@ -1,13 +1,15 @@
 # docker-compose.yml — Development services for cluar5-based projects.
 #
-# This file is a STUB. Uncomment and extend the services your project needs.
-# The app service is pre-configured to use the dev container image.
-#
 # Usage:
 #   docker compose up           # start all enabled services
-#   docker compose up app db    # start specific services
+#   docker compose up db        # start only the database
 #   docker compose down         # stop and remove containers
 #   docker compose down -v      # also remove named volumes (wipes DB data)
+#
+# PostgreSQL: runs as a sidecar. The app connects via DB_URL.
+# To use an external Postgres instead, remove the db service and set DB_URL to
+# point at your external host, e.g.:
+#   DB_URL=postgres://user:password@db.example.com:5432/appdb
 #
 # Note: for VS Code Dev Containers workflows, you typically don't use
 # docker-compose for the app itself — VS Code manages that container.
@@ -34,17 +36,17 @@ services:
   #     - DB_URL=postgres://appuser:password@db:5432/appdb
 
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
-  # db:
-  #   image: postgres:17-alpine
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_USER: appuser
-  #     POSTGRES_PASSWORD: password
-  #     POSTGRES_DB: appdb
-  #   volumes:
-  #     - db-data:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"         # remove this line to keep the DB private
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: appdb
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"           # remove this line to keep the DB private
 
   # ── Redis ────────────────────────────────────────────────────────────────────
   # redis:
@@ -64,7 +66,6 @@ services:
   #     - "15672:15672"       # management UI → http://localhost:15672
 
 # ── Named volumes ─────────────────────────────────────────────────────────────
-# Declare any volumes used by services above.
-# volumes:
-#   db-data:
-#   redis-data:
+volumes:
+  db-data:
+  # redis-data:
