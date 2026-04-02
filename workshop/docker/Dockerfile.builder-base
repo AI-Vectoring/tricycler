@@ -3,7 +3,7 @@
 # ==============================================================================
 # Produces an image containing:
 #   - musl-gcc (via musl-tools, Debian 13 package)
-#   - LuaJIT (OpenResty fork, built from source with musl → /opt/musl)
+#   - LuaJIT (upstream v2.1, built from source with musl → /opt/musl)
 #   - Gambit Scheme (gsc + libgambit.a, built from source with musl → /opt/musl)
 #
 # This image is NEVER deployed to production.
@@ -16,7 +16,7 @@
 
 FROM debian:13-slim
 
-ARG LUAJIT_VERSION=v2.1-20240314
+ARG LUAJIT_VERSION=v2.1
 ARG GAMBIT_VERSION=v4.9.5
 
 ENV LANG=C.UTF-8 \
@@ -43,16 +43,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN mkdir -p ${MUSL_PREFIX}
 
-# --- Build LuaJIT (OpenResty fork) as a static library with musl ---
+# --- Build LuaJIT (upstream) as a static library with musl ---
 # BUILDMODE=static produces libluajit-5.1.a instead of a shared lib.
-# The OpenResty fork is used over upstream because upstream is effectively unmaintained.
+# Using upstream LuaJIT v2.1 branch (github.com/LuaJIT/LuaJIT).
 RUN git clone --depth=1 --branch ${LUAJIT_VERSION} \
-        https://github.com/openresty/luajit2.git /tmp/luajit && \
+        https://github.com/LuaJIT/LuaJIT.git /tmp/luajit && \
     cd /tmp/luajit && \
     make -j$(nproc) \
         CC=musl-gcc \
         STATIC_CC=musl-gcc \
         BUILDMODE=static \
+        TARGET_LDFLAGS="-static -Wl,--defsym,_dl_find_object=0" \
         PREFIX=${MUSL_PREFIX} && \
     make install \
         PREFIX=${MUSL_PREFIX} && \
