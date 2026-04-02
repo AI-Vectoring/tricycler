@@ -1,9 +1,11 @@
 #!/bin/bash
 # publish-dockerhub.sh — Build, test, then push images to Docker Hub.
 #
-# Publishes to ${DOCKERHUB_USER}/${PROJECT_NAME}:
-#   dev, dev-<sha>
-#   builder-base, builder-base-<sha>
+# Publishes:
+#   ${DOCKERHUB_USER}/${PROJECT_NAME}-dev:latest
+#   ${DOCKERHUB_USER}/${PROJECT_NAME}-dev:YYYY-Mmm-DD
+#   ${DOCKERHUB_USER}/${PROJECT_NAME}-builder-base:latest
+#   ${DOCKERHUB_USER}/${PROJECT_NAME}-builder-base:YYYY-Mmm-DD
 #
 # Environment variables:
 #   SKIP_BUILD=1    Skip image build (use existing local images). NOT safe before
@@ -36,10 +38,11 @@ SKIP_TESTS="${SKIP_TESTS:-0}"
 
 [ "$DRY_RUN" = "1" ] && warn "DRY RUN — no images will actually be pushed"
 
-GIT_SHA=$(git rev-parse --short HEAD)
+VERSION=$(date +%Y-%b-%d)
 DEV_IMAGE="${PROJECT_NAME}-dev"
 BUILDER_IMAGE="${PROJECT_NAME}-builder-base"
-HUB="${DOCKERHUB_USER}/${PROJECT_NAME}"
+HUB_DEV="${DOCKERHUB_USER}/${PROJECT_NAME}-dev"
+HUB_BUILDER="${DOCKERHUB_USER}/${PROJECT_NAME}-builder-base"
 
 echo ""
 echo -e "${BOLD}${BLUE}── Pre-publish checks ──────────────────────────────${NC}"
@@ -104,11 +107,11 @@ tag_image() {
   [ "$DRY_RUN" != "1" ] && docker tag "$src" "$dst"
 }
 
-tag_image "${DEV_IMAGE}"     "${HUB}:dev"
-tag_image "${DEV_IMAGE}"     "${HUB}:dev-${GIT_SHA}"
-tag_image "${BUILDER_IMAGE}" "${HUB}:builder-base"
-tag_image "${BUILDER_IMAGE}" "${HUB}:builder-base-${GIT_SHA}"
-ok "Tagged dev and builder-base with :<name> and :<name>-${GIT_SHA}"
+tag_image "${DEV_IMAGE}"     "${HUB_DEV}:latest"
+tag_image "${DEV_IMAGE}"     "${HUB_DEV}:${VERSION}"
+tag_image "${BUILDER_IMAGE}" "${HUB_BUILDER}:latest"
+tag_image "${BUILDER_IMAGE}" "${HUB_BUILDER}:${VERSION}"
+ok "Tagged with :latest and :${VERSION}"
 
 # ── Push ──────────────────────────────────────────────────────────────────────
 echo ""
@@ -120,19 +123,19 @@ push_image() {
   [ "$DRY_RUN" != "1" ] && docker push "$tag"
 }
 
-push_image "${HUB}:dev"
-push_image "${HUB}:dev-${GIT_SHA}"
-push_image "${HUB}:builder-base"
-push_image "${HUB}:builder-base-${GIT_SHA}"
+push_image "${HUB_DEV}:latest"
+push_image "${HUB_DEV}:${VERSION}"
+push_image "${HUB_BUILDER}:latest"
+push_image "${HUB_BUILDER}:${VERSION}"
 
 echo ""
 if [ "$DRY_RUN" = "1" ]; then
   echo -e "${YELLOW}${BOLD}Dry run complete — nothing was pushed.${NC}"
 else
-  ok "Pushed ${HUB}:dev"
-  ok "Pushed ${HUB}:dev-${GIT_SHA}"
-  ok "Pushed ${HUB}:builder-base"
-  ok "Pushed ${HUB}:builder-base-${GIT_SHA}"
+  ok "Pushed ${HUB_DEV}:latest"
+  ok "Pushed ${HUB_DEV}:${VERSION}"
+  ok "Pushed ${HUB_BUILDER}:latest"
+  ok "Pushed ${HUB_BUILDER}:${VERSION}"
   echo ""
   echo -e "${GREEN}${BOLD}Docker Hub publish complete.${NC}"
 fi
