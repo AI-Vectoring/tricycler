@@ -3,9 +3,9 @@
 #
 # Publishes:
 #   ${DOCKERHUB_USER}/${PROJECT_NAME}-dev:latest
-#   ${DOCKERHUB_USER}/${PROJECT_NAME}-dev:YYYY-Mmm-DD
+#   ${DOCKERHUB_USER}/${PROJECT_NAME}-dev:YYYY-MM
 #   ${DOCKERHUB_USER}/${PROJECT_NAME}-builder-base:latest
-#   ${DOCKERHUB_USER}/${PROJECT_NAME}-builder-base:YYYY-Mmm-DD
+#   ${DOCKERHUB_USER}/${PROJECT_NAME}-builder-base:YYYY-MM
 #
 # Environment variables:
 #   SKIP_BUILD=1    Skip image build (use existing local images). NOT safe before
@@ -38,7 +38,7 @@ SKIP_TESTS="${SKIP_TESTS:-0}"
 
 [ "$DRY_RUN" = "1" ] && warn "DRY RUN — no images will actually be pushed"
 
-VERSION=$(date +%Y-%b-%d)
+VERSION=$(date +%Y-%m)
 DEV_IMAGE="${PROJECT_NAME}-dev"
 BUILDER_IMAGE="${PROJECT_NAME}-builder-base"
 HUB_DEV="${DOCKERHUB_USER}/${PROJECT_NAME}-dev"
