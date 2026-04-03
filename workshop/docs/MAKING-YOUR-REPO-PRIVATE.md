@@ -2,6 +2,8 @@
 
 Start with a public repo as described in [GETTING-STARTED.md](GETTING-STARTED.md). When you are ready to make it private, follow this guide.
 
+SelfCel projects start public by default — it's the simplest path. This guide covers converting to private when you're ready.
+
 ---
 
 ## Why extra steps are needed
