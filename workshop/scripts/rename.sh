@@ -10,8 +10,8 @@
 set -e
 
 TEMPLATE_USER="AI-Vectoring"
-TEMPLATE_NAME="cluar5"
-TEMPLATE_REPO="https://github.com/AI-Vectoring/cluar5.git"
+TEMPLATE_NAME="tricycler"
+TEMPLATE_REPO="https://github.com/AI-Vectoring/tricycler.git"
 
 # ── Check if already initialized ────────────────────────────────────────────
 if ! grep -q "GITHUB_USER=${TEMPLATE_USER}" PROJECT.conf 2>/dev/null; then
@@ -22,10 +22,10 @@ fi
 # ── Prompt ───────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║       cluar5 — First Run Setup               ║"
+echo "║       SelfCel — First Run Setup              ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
-echo "This is a fresh clone of the cluar5 template."
+echo "This is a fresh clone of the SelfCel template."
 echo "Enter your project details to initialize the repo."
 echo ""
 
@@ -61,18 +61,19 @@ sed -i \
 # ── Rename all references in known text files ─────────────────────────────────
 # Targets only committed file types — avoids binary files and .git directory.
 find . -not -path './.git/*' -type f \( \
-    -name "*.c"        -o \
-    -name "*.h"        -o \
-    -name "*.scm"      -o \
-    -name "*.lua"      -o \
+    -name "*.ts"       -o \
+    -name "*.tsx"      -o \
+    -name "*.mjs"      -o \
+    -name "*.prisma"   -o \
     -name "*.md"       -o \
     -name "*.sh"       -o \
     -name "*.json"     -o \
+    -name "*.yaml"     -o \
+    -name "*.yml"      -o \
     -name "*.conf"     -o \
     -name "Dockerfile*" -o \
     -name "Makefile"   -o \
-    -name "VERSIONS"   -o \
-    -name "CONTRIBUTING" \
+    -name "VERSIONS"   \
 \) | while read -r file; do
     sed -i \
         -e "s|${TEMPLATE_USER}|${GITHUB_USER}|g" \
@@ -97,5 +98,5 @@ echo "Done. Your project is ready:"
 echo "  Name:       ${PROJECT_NAME}"
 echo "  Repository: ${REPO_URL}"
 echo "  Git:        ${PUSH_STATUS}"
-echo "  Next step:  make build-base && make dev"
+echo "  Next step:  make install && make dev-run"
 echo ""
