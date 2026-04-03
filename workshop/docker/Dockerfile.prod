@@ -1,13 +1,25 @@
 # ==============================================================================
 # Dockerfile.prod — PRODUCTION ENVIRONMENT
 # ==============================================================================
-# Stage 1 (deps):    Installs production dependencies with frozen lockfile.
-# Stage 2 (builder): Clones from GitHub, runs next build → .next/standalone/
-# Stage 3 (runtime): node:22-alpine — minimal Node.js runtime, nothing extra.
-#                    Runs: node server.js
+# Three-stage build:
 #
-# No shell. No package manager. No source code.
-# If it crashes, extract artifacts and analyze in the debug container.
+# Stage 1 (deps):    Installs only production dependencies using a frozen
+#                    lockfile — same packages every time, no surprise upgrades.
+#
+# Stage 2 (builder): Clones from GitHub, copies deps in, runs `next build`.
+#                    Produces .next/standalone/ — a self-contained server with
+#                    only the runtime node_modules it actually needs.
+#                    No source code. No dev tools. No node_modules bloat.
+#
+# Stage 3 (runtime): node:22-alpine — the smallest viable Node.js base (~50MB).
+#                    Contains only the standalone output, static assets, and
+#                    the public folder. Runs: node server.js
+#
+# Why not scratch?
+#   Unlike a static binary (cluar5), Next.js requires a Node.js runtime.
+#   Alpine is as lean as this stack allows — musl libc, no package manager,
+#   no shell by default. If it crashes, use the debug container.
+#
 # See workshop/docs/DEV-WORKFLOW.md — "Forensics Workflow" section.
 #
 # Requires: tricycler-builder-base image (run: make build-base first)
@@ -20,6 +32,10 @@ ARG BASE_IMAGE=tricycler-builder-base
 FROM ${BASE_IMAGE} AS deps
 
 WORKDIR /build/deps
+
+# Copy only the manifest files — avoids invalidating this layer when source changes.
+# --frozen-lockfile: fail if pnpm-lock.yaml is out of sync with package.json.
+# --prod: skip devDependencies — only what's needed at runtime.
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
@@ -29,6 +45,9 @@ FROM ${BASE_IMAGE} AS builder
 ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
+# Clone from GitHub. Injects GITHUB_TOKEN via Docker secret for private repos.
+# Public repos: leave GITHUB_TOKEN unset — the secret mount is a no-op.
+# See workshop/docs/MAKING-YOUR-REPO-PRIVATE.md for setup instructions.
 RUN --mount=type=secret,id=github_token \
     TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true); \
     if [ -n "$TOKEN" ]; then \
@@ -39,7 +58,13 @@ RUN --mount=type=secret,id=github_token \
     git clone --depth=1 --branch ${REPO_BRANCH} "${CLONE_URL}" /build/app
 
 WORKDIR /build/app
+
+# Copy production deps from the deps stage — avoids re-running pnpm install.
 COPY --from=deps /build/deps/node_modules ./node_modules
+
+# next build reads next.config.ts and produces .next/standalone/ because
+# output: 'standalone' is set. That folder is self-contained — it includes
+# a minimal node_modules with only what server.js needs at runtime.
 RUN pnpm build
 
 # --- STAGE 3: RUNTIME ---
@@ -52,16 +77,20 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
+# Alpine uses addgroup/adduser instead of groupadd/useradd.
+# UID/GID 1000 mirrors builder-base and dev container — consistent permissions.
 RUN addgroup -g 1000 appuser && \
     adduser -u 1000 -G appuser -H -s /sbin/nologin -D appuser
 
 WORKDIR /app
 
-# Standalone server
+# Copy only what the standalone server needs to run:
+#   standalone/         — server.js + minimal node_modules
+#   .next/static/       — hashed JS/CSS chunks (served by Next.js)
+#   public/             — static files (images, fonts, favicon)
+# Everything else (source, full node_modules, build cache) stays in the builder.
 COPY --from=builder /build/app/.next/standalone ./
-# Static assets (CSS, JS chunks) — must be served from .next/static
 COPY --from=builder /build/app/.next/static ./.next/static
-# Public folder (images, fonts, favicon)
 COPY --from=builder /build/app/public ./public
 
 RUN chown -R appuser:appuser /app
@@ -70,6 +99,8 @@ USER appuser
 
 EXPOSE 3000
 
+# Health check hits /api/health — implement this endpoint in your app.
+# See workshop/health/README.md for the contract.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD wget -qO- http://localhost:3000/api/health || exit 1
 

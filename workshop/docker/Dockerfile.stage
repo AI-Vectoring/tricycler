@@ -2,9 +2,21 @@
 # Dockerfile.stage — STAGING ENVIRONMENT
 # ==============================================================================
 # Stage 1 (deps):    Installs production dependencies with frozen lockfile.
-# Stage 2 (builder): Clones from GitHub, runs next build — identical to prod.
-# Stage 3 (runtime): node:22-bookworm-slim + test tools.
-#                    Same binary as prod, friendlier environment for inspection.
+#                    Identical to Dockerfile.prod — no shortcuts.
+#
+# Stage 2 (builder): Clones from GitHub, runs next build.
+#                    Identical build process to prod — same output, same flags.
+#
+# Stage 3 (runtime): node:22-bookworm-slim — slightly larger than alpine, but
+#                    gives you bash, curl, wget, and enough tooling to inspect
+#                    a running app without leaving the container.
+#
+# Why not just use prod?
+#   Same binary, different environment. Stage lets you:
+#     - Run integration tests against the production build
+#     - Inspect headers, responses, and DB queries with real tools
+#     - Recompile in-place without rebuilding from scratch
+#   Prod has no shell. Stage has everything you need to investigate.
 #
 # User: appuser by default (mirrors prod behavior exactly).
 #       Shell is present — escalate to root via 'su' when needed.
@@ -19,6 +31,9 @@ ARG BASE_IMAGE=tricycler-builder-base
 FROM ${BASE_IMAGE} AS deps
 
 WORKDIR /build/deps
+
+# --frozen-lockfile: reproducible installs, fails if lockfile is out of sync.
+# --prod: skip devDependencies.
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
@@ -28,6 +43,9 @@ FROM ${BASE_IMAGE} AS builder
 ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
+# Clone from GitHub. Injects GITHUB_TOKEN via Docker secret for private repos.
+# Public repos: leave GITHUB_TOKEN unset — the secret mount is a no-op.
+# See workshop/docs/MAKING-YOUR-REPO-PRIVATE.md for setup instructions.
 RUN --mount=type=secret,id=github_token \
     TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true); \
     if [ -n "$TOKEN" ]; then \
@@ -51,6 +69,8 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
+# Integration testing and inspection tools.
+# These are intentionally absent from prod — stage is where you investigate.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
@@ -65,6 +85,7 @@ RUN groupadd -g 1000 appuser && \
 
 WORKDIR /app
 
+# Same standalone output as prod — identical server, readable stack traces.
 COPY --from=builder /build/app/.next/standalone ./
 COPY --from=builder /build/app/.next/static ./.next/static
 COPY --from=builder /build/app/public ./public
@@ -75,4 +96,6 @@ USER appuser
 
 EXPOSE 3000
 
+# Drop into bash for manual inspection and testing.
+# Run the app with: node server.js
 ENTRYPOINT ["/bin/bash"]

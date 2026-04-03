@@ -2,8 +2,13 @@
 # Dockerfile.builder-base — SHARED BUILD ENVIRONMENT
 # ==============================================================================
 # Produces an image containing:
-#   - Node.js 22
-#   - pnpm (package manager)
+#   - Node.js 22 (LTS)
+#   - pnpm (fast, disk-efficient package manager)
+#
+# Why a builder-base at all?
+#   pnpm install is the expensive step. By pre-installing pnpm into a shared
+#   base image, all build stages (prod, stage, debug) start with it ready —
+#   no repeated apt/npm installs across Dockerfile rebuilds.
 #
 # This image is NEVER deployed to production.
 # It is used as the FROM base for the builder stages in:
@@ -20,13 +25,19 @@ ENV LANG=C.UTF-8 \
     LANGUAGE=C.UTF-8 \
     TZ=UTC
 
+# git: required to clone the repo during the builder stage.
+# ca-certificates: required for HTTPS clones from GitHub.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pnpm globally via npm.
+# pnpm is preferred over npm for its speed and strict dependency isolation.
+# Lockfile (pnpm-lock.yaml) ensures reproducible installs across all builds.
 RUN npm install -g pnpm
 
 # Create appuser — mirrored across all containers so volume permissions match.
+# Also referenced in Dockerfile.prod runtime stage for USER resolution.
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -M -s /sbin/nologin appuser
