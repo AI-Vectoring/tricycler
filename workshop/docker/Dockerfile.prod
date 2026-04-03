@@ -16,7 +16,7 @@
 #                    the public folder. Runs: node server.js
 #
 # Why not scratch?
-#   Unlike a static binary (cluar5), Next.js requires a Node.js runtime.
+#   Unlike a static binary (cluar5-style), Next.js requires a Node.js runtime.
 #   Alpine is as lean as this stack allows — musl libc, no package manager,
 #   no shell by default. If it crashes, use the debug container.
 #
