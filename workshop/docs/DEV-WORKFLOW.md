@@ -1,19 +1,19 @@
 # Development Workflow
 
-This document covers day-to-day development, testing, and incident response using the cluar5 four-container model.
+This document covers day-to-day development, testing, and incident response using the SelfCel three-container model.
 
-For initial project setup, see [TEMPLATE-USAGE.md](TEMPLATE-USAGE.md).
+For initial project setup, see [GETTING-STARTED.md](GETTING-STARTED.md).
 
 ---
 
-## The Four Containers
+## The Three Containers
 
-| Container | Binary | Tools | User | When to use |
+| Container | Build | Tools | User | When to use |
 |---|---|---|---|---|
-| `dev` | gcc debug build (glibc) | Compilers, interpreters, editors | appuser | Daily development |
-| `stage` | musl static (same as prod) | Test tools + full toolchain | appuser (su for root) | Pre-production validation |
-| `prod` | musl static, stripped | None — scratch image | appuser | Production runtime |
-| `debug` | musl static, unstripped + -g | gdb, valgrind, strace, tcpdump | root | Post-incident forensics |
+| `dev` | Node.js dev server, hot reload | Full toolchain, editors, psql | appuser | Daily development |
+| `stage` | Next.js standalone (same as prod) | curl, wget, jq, bash | appuser (su for root) | Pre-production validation |
+| `prod` | Next.js standalone, Alpine runtime | None | appuser | Production runtime |
+| `debug` | Next.js standalone, full Debian | clinic.js, 0x, node inspector | root | Post-incident forensics |
 
 ---
 
@@ -33,18 +33,35 @@ You are now inside the container. The integrated terminal runs inside it.
 ### The development loop
 
 ```bash
-# C changes — recompile
-make dev-build
+# Install dependencies (first time, or after adding packages)
+make install
 
-# Run the dev binary
+# Start the dev server with hot reload
 make dev-run
-
-# Scheme files (.scm) — run directly with interpreter (no compile step)
-gsc r5/main.scm
-
-# Lua files (.lua) — run directly with interpreter (no compile step)
-luajit lua/main.lua
+# → http://localhost:3000
 ```
+
+Changes to `src/` are reflected immediately — no restart needed.
+
+### Adding a package
+
+```bash
+# Inside the dev container
+pnpm add <package-name>
+pnpm add -D <package-name>   # dev dependency
+```
+
+Commit both `package.json` and `pnpm-lock.yaml` — the lockfile is what keeps builds reproducible.
+
+### Database changes
+
+```bash
+# After editing prisma/schema.prisma
+make db-migrate    # creates and applies the migration
+make db-generate   # regenerates the TypeScript client
+```
+
+Migration files are generated in `prisma/migrations/` — commit them alongside the schema change.
 
 ### Committing
 
@@ -60,7 +77,7 @@ Push before destroying the container. The Docker volume is ephemeral.
 
 ## 2. Staging (stage container)
 
-Stage builds the same static binary as production — identical musl environment, identical flags. The only differences are: binary is not stripped (stack traces readable), and test tools are available.
+Stage builds the same Next.js standalone output as production — identical `next build`, identical Node.js runtime. The only differences: the base image is `node:22-bookworm-slim` instead of Alpine, and test tools are available.
 
 ```bash
 # Build base image (first time, or after VERSIONS changes)
@@ -68,26 +85,18 @@ make build-base
 
 # Build and start the stage container
 make stage
-docker run --rm -it my-app-stage
-```
+docker run --rm -it -p 3000:3000 -e DATABASE_URL=postgresql://... my-app-stage
 
-### Recompiling inside stage
-
-The full toolchain is available inside the stage container (copied from builder-base):
-
-```bash
-# Inside the stage container
-cd /app
-make stage-static   # recompile with stage flags
-./cluar5            # test the new binary
+# Inside the stage container — start the server
+node server.js
 ```
 
 ### Integration testing
 
 ```bash
-# Inside stage container — use curl, netcat, jq for API/network testing
-curl -s http://localhost:8080/api | jq .
-echo "ping" | nc localhost 9000
+# Inside stage container — use curl and jq for API testing
+curl -s http://localhost:3000/api/health | jq .
+curl -s http://localhost:3000/api/your-endpoint | jq .
 ```
 
 ---
@@ -99,15 +108,15 @@ make build-base
 make prod
 docker run -d \
     --name my-app \
-    --read-only \
-    --tmpfs /tmp \
-    -p 8080:8080 \
+    -p 3000:3000 \
     --cap-drop=ALL \
     --security-opt no-new-privileges:true \
+    -e DATABASE_URL=postgresql://... \
+    -e NODE_ENV=production \
     my-app-prod
 ```
 
-There is no shell. `docker exec` will fail. This is intentional.
+There is no shell. `docker exec` into a running prod container will fail. This is intentional.
 
 Health status:
 
@@ -120,63 +129,44 @@ docker logs my-app   # health check output appears here
 
 ## 4. Forensics Workflow (debug container)
 
-When production crashes:
-
-### Step 1 — Extract artifacts from prod
-
-```bash
-mkdir -p ./forensics
-
-# The binary (exact match to what was running)
-docker cp my-app:/app/cluar5 ./forensics/cluar5
-
-# Core dump (requires ulimit -c unlimited in the container)
-docker cp my-app:/tmp/core ./forensics/core.dump
-
-# Logs
-docker logs my-app > ./forensics/app.log 2>&1
-```
-
-### Step 2 — Analyze in debug container
+When production behaves unexpectedly, see [DEBUGGING.md](DEBUGGING.md) for the full guide. Quick reference:
 
 ```bash
 make debug
 docker run --rm -it \
-    -v $(pwd)/forensics:/forensics \
+    -p 3000:3000 \
+    -p 9229:9229 \
+    -e DATABASE_URL=postgresql://... \
     my-app-debug
 
-# Inside the debug container:
-cd /forensics
-gdb ./cluar5 core.dump
+# Inside the debug container — start with inspector enabled
+node --inspect=0.0.0.0:9229 server.js
 
-# Valgrind (run the unstripped debug binary, not the prod binary)
-valgrind --leak-check=full /debug/cluar5
-
-# Trace syscalls
-strace -f /debug/cluar5
+# Or profile with clinic
+clinic flame -- node server.js
 ```
 
-### Key distinction
-
-The debug container ships with `/debug/cluar5` — the **unstripped debug build** (compiled with `-g -O0`). This is what you use with gdb and valgrind. The `./forensics/cluar5` you extracted from prod is stripped and harder to read, but it's the exact binary that crashed. Both are useful.
+Connect Chrome DevTools to `localhost:9229` for breakpoints, heap snapshots, and call stacks.
 
 ---
 
 ## 5. Version Management
 
-Check whether dependencies have newer upstream releases:
+Update Node.js or pnpm versions in `VERSIONS`, then rebuild:
 
 ```bash
-workshop/scripts/check-versions.sh
+# Edit VERSIONS — bump NODE_VERSION or PNPM_VERSION
+make build-base
+make prod
+# Test, then commit VERSIONS
 ```
 
-Update to latest:
+Update npm packages:
 
 ```bash
-workshop/scripts/update-versions.sh
-# Review the diff, then:
-make build-base
-# Test, then commit VERSIONS
+# Inside dev container
+pnpm update
+# Review changes, commit pnpm-lock.yaml
 ```
 
 ---
@@ -184,15 +174,19 @@ make build-base
 ## Makefile Reference
 
 ```bash
-make build-base   # Build the shared musl builder image (required first)
+# Container targets (run on host)
+make build-base   # Build the shared Node.js builder image
 make dev          # Build dev container image
 make stage        # Build stage container image
 make prod         # Build production container image
 make debug        # Build debug container image
-make dev-build    # Compile debug binary (run inside dev container)
-make dev-run      # Compile and run (inside dev container)
-make prod-static  # Compile production binary (run inside builder)
-make stage-static # Compile stage binary (run inside builder or stage)
-make debug-static # Compile debug binary with symbols (run inside builder)
-make clean        # Remove build/ output
+
+# App targets (run inside dev container)
+make install      # Install dependencies (pnpm install)
+make dev-run      # Start Next.js dev server
+make db-migrate   # Apply pending Prisma migrations
+make db-generate  # Regenerate Prisma client after schema changes
+
+# Utility
+make clean        # Remove .next/ and node_modules/
 ```
