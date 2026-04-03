@@ -1,6 +1,6 @@
-# Getting Started with cluar5
+# Getting Started with SelfCel
 
-This guide takes you from zero to a running cluar5 project in four steps.
+This guide takes you from zero to a running SelfCel project in four steps.
 
 ---
 
@@ -10,18 +10,18 @@ This guide takes you from zero to a running cluar5 project in four steps.
 - [VS Code](https://code.visualstudio.com/) with the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 - A GitHub account
 
-That's it. No compilers. No language runtimes. No local toolchain. Everything runs inside the container.
+That's it. No Node.js. No databases. No local toolchain. Everything runs inside the container.
 
 ---
 
 ## Step 1 — Create your project from the template
 
-1. Go to **[github.com/AI-Vectoring/cluar5](https://github.com/AI-Vectoring/cluar5)**
+1. Go to **[github.com/AI-Vectoring/tricycler](https://github.com/AI-Vectoring/tricycler)**
 2. Click **"Use this template"** → **"Create a new repository"**
 3. Give it a name, leave visibility as **Public**, click **"Create repository"**
    *(To make it private later: [MAKING-YOUR-REPO-PRIVATE.md](MAKING-YOUR-REPO-PRIVATE.md))*
 
-You now have your own copy of cluar5 on GitHub, ready to become your project.
+You now have your own copy of SelfCel on GitHub, ready to become your project.
 
 ---
 
@@ -33,7 +33,7 @@ You now have your own copy of cluar5 on GitHub, ready to become your project.
 4. Paste the URL you just copied and press Enter
 5. VS Code builds the dev container and opens your workspace inside it
 
-First build takes a few minutes — Docker is pulling Debian and installing the development toolchain. Every subsequent open is instant.
+First build takes a few minutes — Docker is pulling Node.js and installing the development toolchain. Every subsequent open is instant.
 
 ---
 
@@ -43,10 +43,10 @@ The moment the container is ready, a setup wizard runs automatically in the term
 
 ```
 ╔══════════════════════════════════════════════╗
-║       cluar5 — First Run Setup               ║
+║       SelfCel — First Run Setup              ║
 ╚══════════════════════════════════════════════╝
 
-This is a fresh clone of the cluar5 template.
+This is a fresh clone of the SelfCel template.
 Enter your project details to initialize the repo.
 
 Project name (e.g. my-app):         your-project
@@ -54,7 +54,7 @@ GitHub username or org (e.g. acme): your-github-user
 ```
 
 Type your project name and GitHub username. The wizard:
-- Renames all `cluar5` references throughout the repo to your project name
+- Renames all `tricycler` references throughout the repo to your project name
 - Updates `PROJECT.conf` with your repository URL
 - Commits and pushes the initialization to GitHub
 
@@ -62,21 +62,24 @@ Your repo is now yours. The template is gone. What remains is your project.
 
 ---
 
-## Step 4 — Build the base image
+## Step 4 — Install dependencies and start the dev server
 
 In the VS Code integrated terminal (which is running *inside* the container):
 
 ```bash
-make build-base
+make install
+make dev-run
 ```
 
-This compiles musl-libc, LuaJIT, and Gambit Scheme from source into a shared builder image. It runs once — or again when you update `VERSIONS`. Everything else builds on top of it.
+`make install` runs `pnpm install` — pulls all dependencies from `package.json`.
+`make dev-run` starts the Next.js development server with hot reload.
+
+Open your browser at **http://localhost:3000** — your project is running.
 
 ```bash
-# When it finishes, verify everything works:
-make dev-build
-./build/your-project-dev --health
-# → OK
+# Verify the health check works:
+curl http://localhost:3000/api/health
+# → {"ok":true}
 ```
 
 ---
@@ -85,10 +88,14 @@ make dev-build
 
 ```
 your-project/
-├── c/main.c          ← The binding agent. Owns main(), I/O, and the runtime.
-├── lua/main.lua      ← Start here. This is your workspace.
-├── r5/main.scm       ← The LLM's domain. Complex logic lives here.
-└── workshop/         ← Tooling, docs, Dockerfiles. Touch when needed.
+├── src/
+│   ├── app/              ← Next.js App Router — pages, layouts, API routes
+│   ├── components/       ← React components
+│   └── lib/              ← Shared utilities and database client
+├── prisma/
+│   └── schema.prisma     ← Your data model — start here when adding database tables
+├── public/               ← Static assets (images, fonts, favicon)
+└── workshop/             ← Tooling, docs, Dockerfiles. Touch when needed.
 ```
 
 ---
@@ -97,36 +104,27 @@ your-project/
 
 ### Build something
 
-Open `lua/main.lua`. Describe to your LLM what you want to build. The Lua layer is your primary surface — readable, adjustable, immediately legible. Most projects live here for a long time, many stay here forever.
+Open `src/app/page.tsx`. This is your home page — replace the stub with your content. Add pages by creating new folders under `src/app/`. Add API routes at `src/app/api/`.
 
-When logic grows complex, move it to `r5/main.scm`. When you need raw I/O performance or a C library, extend `c/main.c`.
-
-### Run the Gambit REPL
-
-cluar5 includes one of the most powerful development tools in existence: a live REPL connected to your running process. While your application runs, you can evaluate Scheme expressions, redefine functions, and observe the effects — without restarting, without recompiling, without interruption.
+When you need a database table, define it in `prisma/schema.prisma` and run:
 
 ```bash
-# In one terminal: run your app
-make dev-run
-
-# In another terminal: connect to the live process
-rlwrap nc localhost 7000
+make db-migrate
 ```
-
-You are now inside the running application. Type any Scheme expression. See the result. Redefine a function. Watch it take effect immediately. This is the runtime talking back.
-
-See [REPL.md](REPL.md) for the full guide.
 
 ### Test in staging
 
-When you're ready to validate against the production binary:
+When you're ready to validate against the production build:
 
 ```bash
+make build-base
 make stage
 docker run --rm -it your-project-stage
+# Inside the container:
+node server.js
 ```
 
-The stage container builds the same static binary as production — same musl environment, same flags — with test tools available.
+The stage container runs the same Next.js standalone build as production, with test tools available.
 
 ### Ship to production
 
@@ -134,15 +132,14 @@ The stage container builds the same static binary as production — same musl en
 make prod
 docker run -d \
     --name your-project \
-    --read-only \
-    --tmpfs /tmp \
-    -p 8080:8080 \
+    -p 3000:3000 \
     --cap-drop=ALL \
     --security-opt no-new-privileges:true \
+    -e DATABASE_URL=postgresql://... \
     your-project-prod
 ```
 
-A single static binary in a scratch container. No OS. No shell. No attack surface.
+A self-contained Next.js server in a minimal Alpine container. No source code. No dev dependencies. Just your app.
 
 ---
 
@@ -150,9 +147,10 @@ A single static binary in a scratch container. No OS. No shell. No attack surfac
 
 | Problem | Fix |
 |---|---|
-| `make build-base` fails at Gambit | Check internet connectivity inside the container — it clones from GitHub |
-| `--health` returns `UNHEALTHY` | The stub always returns OK — something else is wrong, check `docker logs` |
-| Port 7000 not reachable | Ensure `forwardPorts` is set in `.devcontainer/devcontainer.json` |
+| `make install` fails | Check internet connectivity inside the container |
+| `make dev-run` fails with port conflict | Another process is using port 3000 — stop it or change the port |
+| `http://localhost:3000` not reachable | Ensure `forwardPorts` includes `3000` in `.devcontainer/devcontainer.json` |
+| Database connection error | Check `DATABASE_URL` is set in your `.env` file |
 | Push failed during initialization | Run `git push` manually from the terminal |
 | Container won't start | Run `docker system prune` and rebuild |
 
@@ -162,7 +160,5 @@ A single static binary in a scratch container. No OS. No shell. No attack surfac
 
 - [TEMPLATE-USAGE.md](TEMPLATE-USAGE.md) — What to keep, what to replace, the full development arc
 - [DEV-WORKFLOW.md](DEV-WORKFLOW.md) — Day-to-day development, staging, and forensics
-- [REPL.md](REPL.md) — The live Gambit REPL — what it is and how to use it
-- [EXTENSIONS.md](EXTENSIONS.md) — HTTP, databases, message queues, and other additions
-- [Philosophy-and-amazingness.md](Philosophy-and-amazingness.md) — Why cluar5 exists
+- [DEBUGGING.md](DEBUGGING.md) — Node.js profiling and the debug container
 - [MAKING-YOUR-REPO-PRIVATE.md](MAKING-YOUR-REPO-PRIVATE.md) — How to make your repo private
