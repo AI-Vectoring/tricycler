@@ -1,5 +1,5 @@
 {
-    "name": "cluar5-dev",
+    "name": "tricycler-dev",
     "build": {
         "dockerfile": "../workshop/docker/Dockerfile.dev",
         "context": ".."
@@ -14,39 +14,42 @@
     // and runs the rename wizard if needed.
     "onCreateCommand": "bash workshop/scripts/rename.sh",
 
-    // Keep the container running when the VS Code window closes — preserves
-    // live Gambit REPL state so you can reconnect without losing your session.
+    // Keep the container running when the VS Code window closes.
     "shutdownAction": "none",
 
     "customizations": {
         "vscode": {
             "extensions": [
-                // C/C++
-                "ms-vscode.cpptools",
-                "ms-vscode.cmake-tools",
-                // Lua
-                "sumneko.lua",
+                // TypeScript / Next.js
+                "dbaeumer.vscode-eslint",
+                "esbenp.prettier-vscode",
+                "bradlc.vscode-tailwindcss",
+                // Prisma
+                "Prisma.prisma",
                 // Git
                 "eamodio.gitlens"
             ],
             "settings": {
                 "terminal.integrated.defaultProfile.linux": "bash",
-                "editor.formatOnSave": false,
+                "editor.formatOnSave": true,
+                "editor.defaultFormatter": "esbenp.prettier-vscode",
                 "files.trimTrailingWhitespace": true,
-                "C_Cpp.default.compilerPath": "/usr/bin/gcc",
-                "C_Cpp.default.includePath": [
-                    "${workspaceFolder}/c",
-                    "/usr/include/luajit-2.1"
-                ]
+                "[prisma]": {
+                    "editor.defaultFormatter": "Prisma.prisma"
+                }
             }
         }
     },
 
-    // Gambit REPL port — connect with: rlwrap nc localhost 7000
-    "forwardPorts": [7000],
+    // Next.js dev server + PostgreSQL sidecar
+    "forwardPorts": [3000, 5432],
     "portsAttributes": {
-        "7000": {
-            "label": "Gambit REPL",
+        "3000": {
+            "label": "Next.js",
+            "onAutoForward": "openBrowser"
+        },
+        "5432": {
+            "label": "PostgreSQL",
             "onAutoForward": "silent"
         }
     }
