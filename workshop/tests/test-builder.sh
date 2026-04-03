@@ -1,8 +1,8 @@
 #!/bin/bash
 # test-builder.sh — Smoke tests for the builder-base image.
 #
-# Verifies the musl build environment: static libs, headers, compiler,
-# and ability to produce a working statically-linked binary.
+# Verifies the Node.js build environment: pnpm install, next build,
+# and the presence of the standalone output.
 #
 # Run from repo root:
 #   bash workshop/tests/test-builder.sh
@@ -35,90 +35,103 @@ builder_run() {
   docker run --rm "${BUILDER_IMAGE}" bash -c "$1" 2>/dev/null
 }
 
-# ── LuaJIT static library ─────────────────────────────────────────────────────
-section "LuaJIT (/opt/musl)"
+# ── Node.js and pnpm ──────────────────────────────────────────────────────────
+section "Node.js and pnpm"
 
-check "libluajit-5.1.a exists" \
-  "0" \
-  "$(builder_run 'test -f /opt/musl/lib/libluajit-5.1.a && echo 0 || echo 1')"
+source VERSIONS
 
-check "LuaJIT headers exist" \
-  "0" \
-  "$(builder_run 'test -d /opt/musl/include/luajit-2.1 && echo 0 || echo 1')"
+check_contains "node present and matches NODE_VERSION" \
+  "v${NODE_VERSION}" \
+  "$(builder_run 'node --version')"
 
-check "lua.h present" \
-  "0" \
-  "$(builder_run 'test -f /opt/musl/include/luajit-2.1/lua.h && echo 0 || echo 1')"
+check_contains "pnpm present and matches PNPM_VERSION" \
+  "${PNPM_VERSION}" \
+  "$(builder_run 'pnpm --version')"
 
-# Confirm it's upstream LuaJIT, not OpenResty fork
-check_contains "LuaJIT is upstream (not OpenResty)" \
-  "LuaJIT" \
-  "$(builder_run 'strings /opt/musl/lib/libluajit-5.1.a 2>/dev/null | grep -m1 "LuaJIT" || echo ""')"
+# ── pnpm install ──────────────────────────────────────────────────────────────
+section "pnpm install"
 
-# ── Gambit Scheme ─────────────────────────────────────────────────────────────
-section "Gambit Scheme (/opt/musl)"
+# Mount the repo into the builder and run pnpm install.
+# --frozen-lockfile ensures the lockfile is honoured — same as in Dockerfiles.
+BUILD_TMP=$(make_tmpdir)
 
-check "libgambit.a exists" \
-  "0" \
-  "$(builder_run 'test -f /opt/musl/lib/libgambit.a && echo 0 || echo 1')"
-
-check "gsc compiler exists" \
-  "0" \
-  "$(builder_run 'test -f /opt/musl/bin/gsc && echo 0 || echo 1')"
-
-check "gsc is executable" \
-  "0" \
-  "$(builder_run 'test -x /opt/musl/bin/gsc && echo 0 || echo 1')"
-
-# WHY -e: piping to gsi (e.g. echo '(expr)' | gsi) opens the interactive REPL,
-# which wraps output in prompts ("> 7> *** EOF again to exit"). Use -e to
-# evaluate non-interactively.
-check "gsc evaluates Scheme" \
-  "7" \
-  "$(builder_run '/opt/musl/bin/gsi -e "(display (+ 3 4)) (newline)"')"
-
-# ── musl-gcc static compilation ───────────────────────────────────────────────
-section "musl-gcc static compilation"
-
-CTEST=$(make_tmpdir)
-cat > "${CTEST}/hello.c" << 'EOF'
-#include <stdio.h>
-int main() { printf("musl_ok\n"); return 0; }
-EOF
-
-# Compile inside builder-base
-docker run --rm \
-  -v "${CTEST}:/tmp/ctest" \
-  "${BUILDER_IMAGE}" bash -c \
-  'musl-gcc -static /tmp/ctest/hello.c -o /tmp/ctest/hello_musl' \
-  > /dev/null 2>&1
-
-if [ -f "${CTEST}/hello_musl" ]; then
-  pass "musl-gcc compiled binary produced"
+if docker run --rm \
+    -v "$(pwd):/build/app" \
+    -w /build/app \
+    "${BUILDER_IMAGE}" bash -c \
+    'pnpm install --frozen-lockfile' \
+    > /tmp/pnpm-install.log 2>&1; then
+  pass "pnpm install --frozen-lockfile succeeded"
 else
-  fail "musl-gcc compilation produced no output binary"
+  fail "pnpm install failed — see /tmp/pnpm-install.log"
+  summary "Builder base"
+  exit 1
 fi
 
-# Verify it is statically linked
-FILE_OUTPUT=$(file "${CTEST}/hello_musl" 2>/dev/null)
-if echo "$FILE_OUTPUT" | grep -q "statically linked"; then
-  pass "Binary is statically linked"
+# ── next build ────────────────────────────────────────────────────────────────
+section "next build"
+
+# Run next build inside the builder with the repo mounted.
+# This validates that next.config.ts, tsconfig.json, and all source files
+# compile cleanly and produce the standalone output.
+if docker run --rm \
+    -v "$(pwd):/build/app" \
+    -w /build/app \
+    -e NODE_ENV=production \
+    "${BUILDER_IMAGE}" bash -c \
+    'pnpm install --frozen-lockfile --silent && pnpm build' \
+    > /tmp/next-build.log 2>&1; then
+  pass "next build succeeded"
 else
-  fail "Binary is NOT statically linked  →  $FILE_OUTPUT"
+  fail "next build failed — see /tmp/next-build.log"
+  summary "Builder base"
+  exit 1
 fi
 
-# Verify the binary actually executes (on the host if musl is available, else inside container)
-if command -v "${CTEST}/hello_musl" > /dev/null 2>&1 || [ -x "${CTEST}/hello_musl" ]; then
-  EXEC_RESULT=$("${CTEST}/hello_musl" 2>/dev/null || true)
-  if [ "$EXEC_RESULT" = "musl_ok" ]; then
-    pass "Statically linked binary executes correctly"
-  else
-    # Try running inside a minimal container
-    EXEC_RESULT=$(docker run --rm \
-      -v "${CTEST}:/tmp/ctest" \
-      "${BUILDER_IMAGE}" bash -c '/tmp/ctest/hello_musl' 2>/dev/null)
-    check "Statically linked binary executes correctly" "musl_ok" "$EXEC_RESULT"
+# ── Standalone output ─────────────────────────────────────────────────────────
+section "Standalone output"
+
+check "server.js exists in .next/standalone/" \
+  "0" \
+  "$(test -f .next/standalone/server.js && echo 0 || echo 1)"
+
+check ".next/static/ directory exists" \
+  "0" \
+  "$(test -d .next/static && echo 0 || echo 1)"
+
+# ── Health endpoint ───────────────────────────────────────────────────────────
+section "Health endpoint"
+
+# Start the standalone server and hit /api/health.
+# The server needs a moment to initialize — poll with retries.
+HEALTH_RESULT=$(docker run --rm -d \
+    -v "$(pwd)/.next/standalone:/app" \
+    -v "$(pwd)/.next/static:/app/.next/static" \
+    -v "$(pwd)/public:/app/public" \
+    -p 13000:3000 \
+    -e NODE_ENV=production \
+    -e PORT=3000 \
+    -e HOSTNAME=0.0.0.0 \
+    node:22-alpine node /app/server.js 2>/dev/null)
+
+SERVER_CID="$HEALTH_RESULT"
+HEALTH_OK=0
+
+for i in $(seq 1 10); do
+  sleep 1
+  RESP=$(curl -sf http://localhost:13000/api/health 2>/dev/null || true)
+  if echo "$RESP" | grep -q '"ok":true'; then
+    HEALTH_OK=1
+    break
   fi
+done
+
+docker stop "$SERVER_CID" > /dev/null 2>&1 || true
+
+if [ "$HEALTH_OK" = "1" ]; then
+  pass "GET /api/health → {\"ok\":true}"
+else
+  fail "GET /api/health did not return {\"ok\":true} within 10 seconds"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────

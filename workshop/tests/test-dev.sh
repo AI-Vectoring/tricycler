@@ -1,7 +1,7 @@
 #!/bin/bash
 # test-dev.sh — Smoke tests for the dev container image.
 #
-# Verifies that all runtimes, tools, and services installed in Dockerfile.dev
+# Verifies that all runtimes and tools installed in Dockerfile.dev
 # actually work inside the container.
 #
 # Run from repo root:
@@ -32,67 +32,44 @@ fi
 
 # Helper: run a command inside the dev container and return stdout.
 dev_run() {
-  docker run --rm "${DEV_IMAGE}" -c "$1" 2>/dev/null
+  docker run --rm "${DEV_IMAGE}" bash -c "$1" 2>/dev/null
 }
 
-# ── Lua ───────────────────────────────────────────────────────────────────────
-section "Lua runtimes"
+# ── Node.js ───────────────────────────────────────────────────────────────────
+section "Node.js"
 
-# 'lua' symlink must resolve to Lua 5.4
-check "'lua' symlink → Lua 5.4" \
-  "Lua 5.4" \
-  "$(dev_run 'lua -v 2>&1' | grep -o 'Lua 5\.4')"
+source VERSIONS
 
-# Lua 5.4-specific feature: math.type returns 'integer' for integer values
-check "Lua 5.4 native integers (math.type)" \
-  "integer" \
-  "$(dev_run "lua5.4 -e \"print(math.type(1))\"")"
+check_contains "node is present and matches NODE_VERSION" \
+  "v${NODE_VERSION}" \
+  "$(dev_run 'node --version')"
 
-# LuaJIT must be present and report 2.1
-check_contains "LuaJIT 2.1 present" \
-  "LuaJIT 2.1" \
-  "$(dev_run 'luajit -v 2>&1')"
+# ── pnpm ──────────────────────────────────────────────────────────────────────
+section "pnpm"
 
-# LuaJIT must NOT respond to math.type (Lua 5.1 — this function does not exist)
-check "LuaJIT is Lua 5.1 compatible (no math.type)" \
-  "nil" \
-  "$(dev_run "luajit -e \"print(type(math.type))\"")"
+check_contains "pnpm is present and matches PNPM_VERSION" \
+  "${PNPM_VERSION}" \
+  "$(dev_run 'pnpm --version')"
 
-# ── Gambit Scheme ─────────────────────────────────────────────────────────────
-section "Gambit Scheme"
+# ── TypeScript ────────────────────────────────────────────────────────────────
+section "TypeScript"
 
-# WHY -e: piping to gsi (e.g. echo '(expr)' | gsi) opens the interactive REPL,
-# which wraps output in prompts ("> 42> *** EOF again to exit"). The -e flag
-# evaluates the expression non-interactively and prints only the result.
-check "gsi evaluates expression" \
-  "42" \
-  "$(dev_run 'gsi -e "(display (* 6 7)) (newline)"')"
+# tsc is a dev dependency — must be accessible via pnpm exec after install.
+# We mount the repo into the container to test against the actual package.json.
+check_contains "tsc is accessible via pnpm exec" \
+  "Version" \
+  "$(docker run --rm \
+      -v "$(pwd):/app" \
+      -w /app \
+      "${DEV_IMAGE}" bash -c \
+      'pnpm install --frozen-lockfile --silent 2>/dev/null && pnpm exec tsc --version' 2>/dev/null)"
 
-# ── C toolchain ───────────────────────────────────────────────────────────────
-section "C toolchain"
+# ── Git ───────────────────────────────────────────────────────────────────────
+section "Git"
 
-CTEST=$(make_tmpdir)
-cat > "${CTEST}/hello.c" << 'EOF'
-#include <stdio.h>
-int main() { printf("c_ok\n"); return 0; }
-EOF
-
-check "gcc compiles and runs hello world" \
-  "c_ok" \
-  "$(docker run --rm -v "${CTEST}:/tmp/ctest" "${DEV_IMAGE}" \
-     -c 'gcc /tmp/ctest/hello.c -o /tmp/ctest/hello && /tmp/ctest/hello' 2>/dev/null)"
-
-# ── SQLite ────────────────────────────────────────────────────────────────────
-section "SQLite"
-
-check "sqlite3 CLI present" \
-  "1" \
-  "$(dev_run "sqlite3 :memory: 'SELECT 1'")"
-
-check "libsqlite3-dev headers present" \
-  "0" \
-  "$(docker run --rm "${DEV_IMAGE}" -c \
-     'test -f /usr/include/sqlite3.h && echo 0 || echo 1' 2>/dev/null)"
+check_contains "git is present" \
+  "git version" \
+  "$(dev_run 'git --version')"
 
 # ── PostgreSQL client ─────────────────────────────────────────────────────────
 section "PostgreSQL client"
@@ -100,73 +77,6 @@ section "PostgreSQL client"
 check_contains "psql client present" \
   "PostgreSQL" \
   "$(dev_run 'psql --version')"
-
-check_contains "pg_isready present" \
-  "pg_isready" \
-  "$(dev_run 'which pg_isready')"
-
-check "libpq-dev headers present" \
-  "0" \
-  "$(docker run --rm "${DEV_IMAGE}" -c \
-     'test -f /usr/include/postgresql/libpq-fe.h && echo 0 || echo 1' 2>/dev/null)"
-
-# ── H2O ───────────────────────────────────────────────────────────────────────
-section "H2O HTTP server"
-
-check_contains "h2o binary present and runs" \
-  "h2o version" \
-  "$(dev_run 'h2o --version 2>&1')"
-
-check_contains "H2O built with OpenSSL" \
-  "OpenSSL" \
-  "$(dev_run 'h2o --version 2>&1')"
-
-# HTTP/3 must NOT be present (deferred — requires quictls/BoringSSL)
-QUIC_OUTPUT="$(dev_run 'h2o --version 2>&1 | grep -i quic || echo quic_absent')"
-check "HTTP/3 (QUIC) correctly absent" \
-  "quic_absent" \
-  "$QUIC_OUTPUT"
-
-# H2O must actually serve a static file via HTTP
-H2O_TMPDIR=$(make_tmpdir)
-echo "h2o_serve_ok" > "${H2O_TMPDIR}/index.txt"
-cat > "${H2O_TMPDIR}/h2o.conf" << 'CONF'
-# REQUIRED: 'listen' is mandatory in H2O 2.3.x+. Older docs and examples omit
-# it and assume a default port, but this build (built from master, 2026-04-02)
-# exits with error 78 if 'listen' is absent. Always include it explicitly.
-listen:
-  host: 127.0.0.1
-  port: 7080
-hosts:
-  "127.0.0.1:7080":
-    paths:
-      "/":
-        file.dir: /tmp/www
-CONF
-
-# WHY -m worker:
-#   H2O's default mode is 'daemon' — it forks a child process and the parent
-#   exits immediately. When run inside a container test, the daemonized child
-#   loses its stdin/stdout context and curl gets connection refused.
-#   'daemon: OFF' config key does NOT exist in this build (exits with
-#   "unknown command: daemon"). The correct fix is '-m worker', which keeps
-#   the invoked process in the foreground as the actual request handler.
-#   Background it with '&' so we can curl it from the same shell.
-H2O_RESULT=$(docker run --rm \
-  -v "${H2O_TMPDIR}:/tmp/www:ro" \
-  -v "${H2O_TMPDIR}/h2o.conf:/tmp/h2o.conf:ro" \
-  "${DEV_IMAGE}" -c '
-    h2o -m worker -c /tmp/h2o.conf &
-    H2O_PID=$!
-    sleep 1
-    RESULT=$(curl -sf http://127.0.0.1:7080/index.txt)
-    kill $H2O_PID 2>/dev/null
-    printf "%s" "$RESULT"
-  ' 2>/dev/null)
-
-check "H2O serves static file via HTTP" \
-  "h2o_serve_ok" \
-  "$H2O_RESULT"
 
 # ── Summary ───────────────────────────────────────────────────────────────────
 summary "Dev container"

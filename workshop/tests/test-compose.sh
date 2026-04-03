@@ -8,7 +8,7 @@
 #   bash workshop/tests/test-compose.sh
 #
 # WARNING: This test starts and stops Docker containers and creates/removes
-# a named volume (cluar5-test-db-data). It does NOT affect the standard
+# a named volume (tricycler-test-db-data). It does NOT affect the standard
 # db-data volume used during normal development.
 
 set -uo pipefail
@@ -16,7 +16,7 @@ cd "$(git rev-parse --show-toplevel)"
 source workshop/tests/lib.sh
 
 # Use a dedicated test compose project name to avoid colliding with dev volumes
-COMPOSE_PROJECT="cluar5-test"
+COMPOSE_PROJECT="tricycler-test"
 COMPOSE_OPTS="-f ${COMPOSE_FILE} -p ${COMPOSE_PROJECT}"
 
 cleanup_compose() {
