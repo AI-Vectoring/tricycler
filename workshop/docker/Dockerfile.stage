@@ -1,25 +1,31 @@
 # ==============================================================================
 # Dockerfile.stage — STAGING ENVIRONMENT
 # ==============================================================================
-# Stage 1 (builder): Clones from GitHub, compiles the same static binary as prod.
-#                    Identical flags, identical musl environment. No shortcuts.
-# Stage 2 (runtime): debian:13-slim + full build toolchain + integration test tools.
-#                    Binary is NOT stripped — stack traces are readable.
+# Stage 1 (deps):    Installs production dependencies with frozen lockfile.
+# Stage 2 (builder): Clones from GitHub, runs next build — identical to prod.
+# Stage 3 (runtime): node:22-bookworm-slim + test tools.
+#                    Same binary as prod, friendlier environment for inspection.
 #
 # User: appuser by default (mirrors prod behavior exactly).
 #       Shell is present — escalate to root via 'su' when needed.
-#       Full toolchain is available — recompile in-place without leaving the container.
 #
-# Requires: cluar5-builder-base image (run: make build-base first)
+# Requires: tricycler-builder-base image (run: make build-base first)
 # Build:    make stage
 # ==============================================================================
 
-ARG BASE_IMAGE=cluar5-builder-base
+ARG BASE_IMAGE=tricycler-builder-base
 
-# --- STAGE 1: BUILDER ---
+# --- STAGE 1: DEPS ---
+FROM ${BASE_IMAGE} AS deps
+
+WORKDIR /build/deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+# --- STAGE 2: BUILDER ---
 FROM ${BASE_IMAGE} AS builder
 
-ARG REPO_URL=https://github.com/AI-Vectoring/cluar5.git
+ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
 RUN --mount=type=secret,id=github_token \
@@ -32,25 +38,20 @@ RUN --mount=type=secret,id=github_token \
     git clone --depth=1 --branch ${REPO_BRANCH} "${CLONE_URL}" /build/app
 
 WORKDIR /build/app
-RUN mkdir -p build && make stage-static
+COPY --from=deps /build/deps/node_modules ./node_modules
+RUN pnpm build
 
-# --- STAGE 2: RUNTIME ---
-FROM debian:13-slim
+# --- STAGE 3: RUNTIME ---
+FROM node:22-bookworm-slim
 
-ENV LANG=C.UTF-8 \
+ENV NODE_ENV=production \
+    LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    LANGUAGE=C.UTF-8 \
     TZ=UTC \
-    MUSL_PREFIX=/opt/musl
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Recompile capability (use the musl libs copied from builder, not apt gambc/luajit)
-    gcc \
-    musl-tools \
-    make \
-    git \
-    ca-certificates \
-    # Integration testing tools
     curl \
     wget \
     netcat-openbsd \
@@ -59,23 +60,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy the musl build environment from builder (gsc, libgambit.a, libluajit.a, headers).
-# This allows recompiling the binary inside stage without rebuilding from source.
-COPY --from=builder /opt/musl /opt/musl
-
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -m -s /bin/bash appuser
 
 WORKDIR /app
 
-# Copy the stage binary (not stripped, readable stack traces)
-COPY --from=builder /build/app/build/cluar5 /app/cluar5
+COPY --from=builder /build/app/.next/standalone ./
+COPY --from=builder /build/app/.next/static ./.next/static
+COPY --from=builder /build/app/public ./public
 
 RUN chown -R appuser:appuser /app
 
-ENV PATH="${MUSL_PREFIX}/bin:${PATH}"
-
-# Run as appuser — same as prod. Use 'su' to escalate when needed.
 USER appuser
+
+EXPOSE 3000
 
 ENTRYPOINT ["/bin/bash"]

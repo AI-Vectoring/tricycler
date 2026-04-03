@@ -1,28 +1,32 @@
 # ==============================================================================
 # Dockerfile.prod — PRODUCTION ENVIRONMENT
 # ==============================================================================
-# Stage 1 (builder): Clones from GitHub, compiles stripped static binary with musl.
-#                    -O2 optimized, -s stripped, zero debug symbols.
-# Stage 2 (runtime): scratch — contains ONLY:
-#                      /app/cluar5          (the binary)
-#                      /etc/ssl/certs/      (CA certificates for HTTPS)
-#                      /usr/share/zoneinfo/ (timezone data)
-#                      /etc/passwd          (so USER appuser resolves)
+# Stage 1 (deps):    Installs production dependencies with frozen lockfile.
+# Stage 2 (builder): Clones from GitHub, runs next build → .next/standalone/
+# Stage 3 (runtime): node:22-alpine — minimal Node.js runtime, nothing extra.
+#                    Runs: node server.js
 #
-# No shell. No compilers. No package manager. No editors.
+# No shell. No package manager. No source code.
 # If it crashes, extract artifacts and analyze in the debug container.
 # See workshop/docs/DEV-WORKFLOW.md — "Forensics Workflow" section.
 #
-# Requires: cluar5-builder-base image (run: make build-base first)
+# Requires: tricycler-builder-base image (run: make build-base first)
 # Build:    make prod
 # ==============================================================================
 
-ARG BASE_IMAGE=cluar5-builder-base
+ARG BASE_IMAGE=tricycler-builder-base
 
-# --- STAGE 1: BUILDER ---
+# --- STAGE 1: DEPS ---
+FROM ${BASE_IMAGE} AS deps
+
+WORKDIR /build/deps
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod
+
+# --- STAGE 2: BUILDER ---
 FROM ${BASE_IMAGE} AS builder
 
-ARG REPO_URL=https://github.com/AI-Vectoring/cluar5.git
+ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
 RUN --mount=type=secret,id=github_token \
@@ -35,33 +39,38 @@ RUN --mount=type=secret,id=github_token \
     git clone --depth=1 --branch ${REPO_BRANCH} "${CLONE_URL}" /build/app
 
 WORKDIR /build/app
-RUN mkdir -p build && make prod-static
+COPY --from=deps /build/deps/node_modules ./node_modules
+RUN pnpm build
 
-# --- STAGE 2: RUNTIME ---
-FROM scratch
+# --- STAGE 3: RUNTIME ---
+FROM node:22-alpine
 
-# Binary
-COPY --from=builder /build/app/build/cluar5 /app/cluar5
-
-# CA certificates (required for any outbound HTTPS calls)
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-
-# Timezone data (required if the application formats local times)
-COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
-
-# Minimal passwd so USER appuser resolves (appuser created in builder-base)
-COPY --from=builder /etc/passwd /etc/passwd
-COPY --from=builder /etc/group /etc/group
-
-ENV LANG=C.UTF-8 \
+ENV NODE_ENV=production \
+    LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
-    TZ=UTC
+    TZ=UTC \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+
+RUN addgroup -g 1000 appuser && \
+    adduser -u 1000 -G appuser -H -s /sbin/nologin -D appuser
+
+WORKDIR /app
+
+# Standalone server
+COPY --from=builder /build/app/.next/standalone ./
+# Static assets (CSS, JS chunks) — must be served from .next/static
+COPY --from=builder /build/app/.next/static ./.next/static
+# Public folder (images, fonts, favicon)
+COPY --from=builder /build/app/public ./public
+
+RUN chown -R appuser:appuser /app
 
 USER appuser
 
-# Health check uses the --health flag implemented in c/main.c.
-# See workshop/health/README.md for the contract and how to extend it.
-HEALTHCHECK --interval=300s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/app/cluar5", "--health"]
+EXPOSE 3000
 
-ENTRYPOINT ["/app/cluar5"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -qO- http://localhost:3000/api/health || exit 1
+
+ENTRYPOINT ["node", "server.js"]

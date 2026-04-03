@@ -2,9 +2,8 @@
 # Dockerfile.builder-base — SHARED BUILD ENVIRONMENT
 # ==============================================================================
 # Produces an image containing:
-#   - musl-gcc (via musl-tools, Debian 13 package)
-#   - LuaJIT (upstream v2.1, built from source with musl → /opt/musl)
-#   - Gambit Scheme (gsc + libgambit.a, built from source with musl → /opt/musl)
+#   - Node.js 22
+#   - pnpm (package manager)
 #
 # This image is NEVER deployed to production.
 # It is used as the FROM base for the builder stages in:
@@ -14,72 +13,20 @@
 # All other make targets depend on this one.
 # ==============================================================================
 
-FROM debian:13-slim
-
-ARG LUAJIT_VERSION=v2.1
-ARG GAMBIT_VERSION=v4.9.5
+FROM node:22-bookworm-slim
 
 ENV LANG=C.UTF-8 \
     LC_ALL=C.UTF-8 \
     LANGUAGE=C.UTF-8 \
-    TZ=UTC \
-    MUSL_PREFIX=/opt/musl
+    TZ=UTC
 
-# Install build toolchain.
-# musl-tools provides musl-gcc (wrapper around gcc targeting musl libc).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    g++ \
-    make \
-    autoconf \
-    automake \
-    libtool \
-    pkg-config \
-    musl-tools \
     git \
     ca-certificates \
-    patch \
     && rm -rf /var/lib/apt/lists/*
 
-RUN mkdir -p ${MUSL_PREFIX}
-
-# --- Build LuaJIT (upstream) as a static library with musl ---
-# BUILDMODE=static produces libluajit-5.1.a instead of a shared lib.
-# Using upstream LuaJIT v2.1 branch (github.com/LuaJIT/LuaJIT).
-RUN git clone --depth=1 --branch ${LUAJIT_VERSION} \
-        https://github.com/LuaJIT/LuaJIT.git /tmp/luajit && \
-    cd /tmp/luajit && \
-    make -j$(nproc) \
-        CC=musl-gcc \
-        STATIC_CC=musl-gcc \
-        BUILDMODE=static \
-        TARGET_LDFLAGS="-static -Wl,--defsym,_dl_find_object=0" \
-        PREFIX=${MUSL_PREFIX} && \
-    make install \
-        PREFIX=${MUSL_PREFIX} && \
-    rm -rf /tmp/luajit
-
-# --- Build Gambit Scheme as a static library with musl ---
-# --disable-shared: produce only libgambit.a, no .so
-# --enable-single-host: optimize for single-arch builds (smaller binary)
-# gsc (the compiler) is also installed to ${MUSL_PREFIX}/bin for use in Makefile
-RUN git clone --depth=1 --branch ${GAMBIT_VERSION} \
-        https://github.com/gambit/gambit.git /tmp/gambit && \
-    cd /tmp/gambit && \
-    ./configure \
-        --prefix=${MUSL_PREFIX} \
-        CC=musl-gcc \
-        CFLAGS="-O2" \
-        --enable-single-host \
-        --disable-shared \
-        --enable-static && \
-    make -j$(nproc) && \
-    make install && \
-    rm -rf /tmp/gambit
+RUN npm install -g pnpm
 
 # Create appuser — mirrored across all containers so volume permissions match.
-# Also required for Dockerfile.prod (scratch) to reference a non-root UID.
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -M -s /sbin/nologin appuser
-
-ENV PATH="${MUSL_PREFIX}/bin:${PATH}"
