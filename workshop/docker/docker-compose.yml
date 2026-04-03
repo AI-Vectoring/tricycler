@@ -1,4 +1,4 @@
-# docker-compose.yml — Development services for cluar5-based projects.
+# docker-compose.yml — Development services for SelfCel projects.
 #
 # Usage:
 #   docker compose up           # start all enabled services
@@ -7,9 +7,9 @@
 #   docker compose down -v      # also remove named volumes (wipes DB data)
 #
 # PostgreSQL: runs as a sidecar. The app connects via DB_URL.
-# To use an external Postgres instead, remove the db service and set DB_URL to
+# To use an external Postgres instead, remove the db service and set DATABASE_URL to
 # point at your external host, e.g.:
-#   DB_URL=postgres://user:password@db.example.com:5432/appdb
+#   DATABASE_URL=postgresql://user:password@db.example.com:5432/appdb
 #
 # Note: for VS Code Dev Containers workflows, you typically don't use
 # docker-compose for the app itself — VS Code manages that container.
@@ -22,18 +22,18 @@ services:
   # Uncomment if running outside VS Code Dev Containers.
   #
   # app:
-  #   image: ${PROJECT_NAME:-cluar5}-dev
+  #   image: ${PROJECT_NAME:-tricycler}-dev
   #   build:
   #     context: ../..
   #     dockerfile: workshop/docker/Dockerfile.dev
   #   volumes:
   #     - ../..:/app          # mount source code for hot-reload
   #   ports:
-  #     - "8080:8080"         # adjust to your application's port
+  #     - "3000:3000"
   #   depends_on:
   #     - db
   #   environment:
-  #     - DB_URL=postgres://appuser:password@db:5432/appdb
+  #     - DATABASE_URL=postgresql://appuser:password@db:5432/appdb
 
   # ── PostgreSQL ───────────────────────────────────────────────────────────────
   db:
