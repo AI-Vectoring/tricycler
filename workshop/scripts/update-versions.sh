@@ -3,7 +3,7 @@
 #
 # Run this when check-versions.sh reports outdated packages.
 # Shows a diff of what will change and asks for confirmation before writing.
-# After updating, rebuild containers: make build-base && make prod (etc.)
+# After updating, rebuild containers: make build-base
 
 set -e
 
@@ -21,21 +21,26 @@ echo ""
 echo "Fetching latest upstream versions..."
 echo ""
 
-fetch_github_latest() {
-    local repo="$1"
-    local strip_prefix="${2:-}"
-    curl -sf "https://api.github.com/repos/${repo}/releases/latest" \
-        | grep '"tag_name"' | head -1 \
-        | sed "s/.*\"tag_name\": \"${strip_prefix}\\(.*\\)\".*/\\1/" \
-        || echo "FETCH_FAILED"
-}
+# ── Node.js LTS ───────────────────────────────────────────────────────────────
+NEW_NODE=$(curl -sf "https://nodejs.org/dist/index.json" \
+    | grep -o '"version":"v[^"]*"' \
+    | grep -v 'nightly\|rc\|test' \
+    | head -20 \
+    | awk -F'"' '{print $4}' \
+    | while read -r v; do
+        major="${v#v}"
+        major="${major%%.*}"
+        if [ $((major % 2)) -eq 0 ]; then
+            echo "$major"
+            break
+        fi
+    done || echo "FETCH_FAILED")
 
-NEW_LUAJIT=$(fetch_github_latest "openresty/luajit2")
-NEW_GAMBIT=$(fetch_github_latest "gambit/gambit")
-NEW_GDB=$(fetch_github_latest "bminor/binutils-gdb" "gdb-")
-NEW_VALGRIND=$(fetch_github_latest "fredericgermain/valgrind")
-NEW_STRACE=$(fetch_github_latest "strace/strace" "v")
-NEW_TCPDUMP=$(fetch_github_latest "the-tcpdump-group/tcpdump" "tcpdump-")
+# ── pnpm ──────────────────────────────────────────────────────────────────────
+NEW_PNPM=$(curl -sf \
+    "https://api.github.com/repos/pnpm/pnpm/releases/latest" \
+    | grep '"tag_name"' | head -1 \
+    | sed 's/.*"tag_name": "v\([0-9]*\)\..*/\1/' || echo "FETCH_FAILED")
 
 # ── Show diff ─────────────────────────────────────────────────────────────────
 echo "Proposed changes:"
@@ -45,21 +50,17 @@ CHANGES=0
 show_change() {
     local name="$1" current="$2" new="$3"
     if [ "$current" != "$new" ] && [ "$new" != "FETCH_FAILED" ]; then
-        printf "  %-22s %s  →  %s\n" "$name" "$current" "$new"
+        printf "  %-20s %s  →  %s\n" "$name" "$current" "$new"
         CHANGES=$((CHANGES+1))
     elif [ "$new" = "FETCH_FAILED" ]; then
-        printf "  %-22s %s  (fetch failed — skipping)\n" "$name" "$current"
+        printf "  %-20s %s  (fetch failed — skipping)\n" "$name" "$current"
     else
-        printf "  %-22s %s  (no change)\n" "$name" "$current"
+        printf "  %-20s %s  (no change)\n" "$name" "$current"
     fi
 }
 
-show_change "LUAJIT_VERSION"   "$LUAJIT_VERSION"   "$NEW_LUAJIT"
-show_change "GAMBIT_VERSION"   "$GAMBIT_VERSION"   "$NEW_GAMBIT"
-show_change "GDB_VERSION"      "$GDB_VERSION"      "$NEW_GDB"
-show_change "VALGRIND_VERSION" "$VALGRIND_VERSION" "$NEW_VALGRIND"
-show_change "STRACE_VERSION"   "$STRACE_VERSION"   "$NEW_STRACE"
-show_change "TCPDUMP_VERSION"  "$TCPDUMP_VERSION"  "$NEW_TCPDUMP"
+show_change "NODE_VERSION" "$NODE_VERSION" "$NEW_NODE"
+show_change "PNPM_VERSION" "$PNPM_VERSION" "$NEW_PNPM"
 
 echo ""
 
@@ -82,17 +83,13 @@ update_version() {
     fi
 }
 
-update_version "LUAJIT_VERSION"   "$NEW_LUAJIT"
-update_version "GAMBIT_VERSION"   "$NEW_GAMBIT"
-update_version "GDB_VERSION"      "$NEW_GDB"
-update_version "VALGRIND_VERSION" "$NEW_VALGRIND"
-update_version "STRACE_VERSION"   "$NEW_STRACE"
-update_version "TCPDUMP_VERSION"  "$NEW_TCPDUMP"
+update_version "NODE_VERSION" "$NEW_NODE"
+update_version "PNPM_VERSION" "$NEW_PNPM"
 
 echo ""
 echo "VERSIONS updated. Next steps:"
 echo "  1. Review the changes:  git diff VERSIONS"
 echo "  2. Rebuild base image:  make build-base"
-echo "  3. Test all containers: make stage && make debug"
+echo "  3. Test containers:     make stage"
 echo "  4. Commit if clean:     git add VERSIONS && git commit -m 'chore: bump dependency versions'"
 echo ""

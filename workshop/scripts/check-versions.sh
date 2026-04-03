@@ -37,44 +37,32 @@ check() {
     fi
 }
 
-# ── Tier 1: Core Runtime ─────────────────────────────────────────────────────
-echo "Tier 1 — Core Runtime (goes to production):"
+# ── Node.js LTS ───────────────────────────────────────────────────────────────
+# Fetches the latest LTS major version from the Node.js release index.
+LATEST_NODE=$(curl -sf "https://nodejs.org/dist/index.json" \
+    | grep -o '"version":"v[^"]*"' \
+    | grep -v 'nightly\|rc\|test' \
+    | head -20 \
+    | awk -F'"' '{print $4}' \
+    | while read -r v; do
+        major="${v#v}"
+        major="${major%%.*}"
+        # LTS versions are even-numbered majors
+        if [ $((major % 2)) -eq 0 ]; then
+            echo "$major"
+            break
+        fi
+    done || echo "unavailable")
 
-LATEST_LUAJIT=$(curl -sf \
-    "https://api.github.com/repos/openresty/luajit2/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": "\(.*\)".*/\1/' || echo "unavailable")
+# ── pnpm ──────────────────────────────────────────────────────────────────────
+LATEST_PNPM=$(curl -sf \
+    "https://api.github.com/repos/pnpm/pnpm/releases/latest" \
+    | grep '"tag_name"' | head -1 \
+    | sed 's/.*"tag_name": "v\([0-9]*\)\..*/\1/' || echo "unavailable")
 
-LATEST_GAMBIT=$(curl -sf \
-    "https://api.github.com/repos/gambit/gambit/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": "\(.*\)".*/\1/' || echo "unavailable")
-
-check "LuaJIT (OpenResty)" "$LUAJIT_VERSION" "$LATEST_LUAJIT"
-check "Gambit"             "$GAMBIT_VERSION"  "$LATEST_GAMBIT"
-
-echo ""
-echo "Tier 2 — Debug/Forensics Tools (never shipped to prod):"
-
-LATEST_GDB=$(curl -sf \
-    "https://api.github.com/repos/bminor/binutils-gdb/tags" \
-    | grep '"name"' | grep 'gdb-' | head -1 \
-    | sed 's/.*"name": "gdb-\(.*\)".*/\1/' || echo "unavailable")
-
-LATEST_VALGRIND=$(curl -sf \
-    "https://api.github.com/repos/fredericgermain/valgrind/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": "\(.*\)".*/\1/' || echo "unavailable")
-
-LATEST_STRACE=$(curl -sf \
-    "https://api.github.com/repos/strace/strace/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": "v\(.*\)".*/\1/' || echo "unavailable")
-
-LATEST_TCPDUMP=$(curl -sf \
-    "https://api.github.com/repos/the-tcpdump-group/tcpdump/releases/latest" \
-    | grep '"tag_name"' | head -1 | sed 's/.*"tag_name": "tcpdump-\(.*\)".*/\1/' || echo "unavailable")
-
-check "GDB"       "$GDB_VERSION"       "$LATEST_GDB"
-check "Valgrind"  "$VALGRIND_VERSION"  "$LATEST_VALGRIND"
-check "strace"    "$STRACE_VERSION"    "$LATEST_STRACE"
-check "tcpdump"   "$TCPDUMP_VERSION"   "$LATEST_TCPDUMP"
+echo "Runtime:"
+check "Node.js (LTS major)" "$NODE_VERSION" "$LATEST_NODE"
+check "pnpm (major)"        "$PNPM_VERSION" "$LATEST_PNPM"
 
 echo ""
 echo "Result: ${OK} current, ${OUTDATED} outdated."
