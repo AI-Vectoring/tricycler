@@ -1,12 +1,12 @@
-# Using cluar5 as a Project Template
+# Using SelfCel as a Project Template
 
-cluar5 is a starting point for LLM-native projects. Fork it, initialize it with your project name, and start building. The architecture is already in place — your job is to direct.
+SelfCel is a starting point for self-hosted Next.js projects. Fork it, initialize it with your project name, and start building. The stack is already in place — your job is to direct.
 
 ---
 
 ## Step 1 — Fork the template on GitHub
 
-1. Go to [github.com/AI-Vectoring/cluar5](https://github.com/AI-Vectoring/cluar5)
+1. Go to [github.com/AI-Vectoring/tricycler](https://github.com/AI-Vectoring/tricycler)
 2. Click **"Use this template"** → **"Create a new repository"**
 3. Name it, set visibility, click **"Create repository"**
 
@@ -30,33 +30,45 @@ It renames all references throughout the repo, commits, and pushes. Your project
 
 ---
 
-## Step 3 — Build the base image
+## Step 3 — Install dependencies and start
 
 Inside the dev container terminal:
 
 ```bash
-make build-base
+make install
+make dev-run
 ```
 
-This builds the shared builder image — musl-gcc, Gambit, and LuaJIT compiled from source. Takes a few minutes the first time. All subsequent container builds reuse it.
+Your app is running at **http://localhost:3000**.
 
 ---
 
 ## Where to build your project
 
-### Start in Lua — always
+### Start in `src/app/` — always
 
-`lua/main.lua` is where everything begins. Describe what you need to the LLM, let it write Lua, read the result, refine. The Lua layer is designed to be readable and adjustable without deep expertise. Most of the iteration in a project happens here.
+`src/app/page.tsx` is your home page. `src/app/layout.tsx` is the root layout shared by every page. Add new pages by creating folders under `src/app/` — each folder with a `page.tsx` becomes a route.
 
-For many projects, this layer alone is sufficient to ship a complete, working product.
+API routes live at `src/app/api/` — each folder with a `route.ts` becomes an endpoint.
 
-### Move complexity to Scheme — when Lua grows opaque
+### Define your data model in `prisma/schema.prisma`
 
-When logic becomes dense enough that reading it requires effort, move it to `r5/main.scm`. Scheme's expressiveness handles complexity gracefully — state machines, parsers, rule engines, data transformations. The LLM operates freely here. You don't need to read it, but you can trust it.
+When your app needs a database table, add it to `prisma/schema.prisma` and run:
 
-### Use C for the rest — when it must be C
+```bash
+make db-migrate    # creates the migration and applies it
+make db-generate   # regenerates the TypeScript client
+```
 
-`c/main.c` owns the main loop and the runtime bindings. Add C when you need maximum I/O performance, direct hardware access, or when a Lua rough edge requires a native solution. C is also where you add capabilities that neither Lua nor Scheme can provide on their own.
+Your models are now available as fully typed objects throughout your app.
+
+### Add components to `src/components/`
+
+Reusable React components live here. Import them anywhere in `src/app/`.
+
+### Add utilities to `src/lib/`
+
+Shared logic — database client, helper functions, constants — lives here. The Prisma client typically lives at `src/lib/db.ts`.
 
 ---
 
@@ -72,15 +84,19 @@ When logic becomes dense enough that reading it requires effort, move it to `r5/
 | `Makefile` | Build automation — extend, don't replace |
 | `.devcontainer/devcontainer.json` | VS Code integration |
 | `PROJECT.conf`, `VERSIONS` | Already updated by rename.sh |
+| `next.config.ts` | `output: 'standalone'` is required for containerized prod |
+| `tsconfig.json` | Required by Next.js — modify only if you know why |
+| `tailwind.config.ts`, `postcss.config.mjs` | Extend the theme, don't replace the structure |
 
 ### Replace with your application
 
 | File | What to do |
 |---|---|
-| `lua/main.lua` | Start here. Replace the stub with your Lua logic. |
-| `r5/main.scm` | Move complex logic here as the project grows. |
-| `c/main.c` | Extend the main loop and add C bindings as needed. |
-| `README.md` | Replace with your project's documentation. |
+| `src/app/page.tsx` | Replace the stub with your home page |
+| `src/app/layout.tsx` | Update metadata, fonts, and global styles |
+| `src/app/globals.css` | Add your global CSS on top of Tailwind's base |
+| `prisma/schema.prisma` | Define your data models here |
+| `README.md` | Replace with your project's documentation |
 
 ---
 
@@ -88,50 +104,40 @@ When logic becomes dense enough that reading it requires effort, move it to `r5/
 
 ```
 /
-├── c/                    ← C source (core engine, main loop, I/O)
-├── lua/                  ← LuaJIT (primary human surface — start here)
-├── r5/                   ← Gambit Scheme (LLM's domain — complex logic)
+├── src/
+│   ├── app/              ← Next.js App Router (pages, layouts, API routes)
+│   ├── components/       ← Reusable React components
+│   └── lib/              ← Shared utilities and database client
+├── prisma/               ← Prisma schema and migrations
+├── public/               ← Static assets (images, fonts, favicon)
 ├── .devcontainer/        ← VS Code Dev Containers configuration
 ├── workshop/
-│   ├── docker/           ← All Dockerfiles + docker-compose stub
-│   ├── scripts/          ← rename.sh, check-versions.sh, update-versions.sh
-│   ├── health/           ← Health check contract and reference implementation
+│   ├── docker/           ← All Dockerfiles
+│   ├── scripts/          ← rename.sh, version management
+│   ├── health/           ← Health check contract
 │   └── docs/             ← This documentation
-├── build/                ← Generated output (gitignored)
 ├── PROJECT.conf          ← Project name and repository URL
-├── VERSIONS              ← Pinned dependency versions
+├── VERSIONS              ← Pinned Node.js and pnpm versions
+├── package.json          ← Dependencies and scripts
+├── next.config.ts        ← Next.js configuration
+├── tailwind.config.ts    ← Tailwind CSS configuration
+├── tsconfig.json         ← TypeScript configuration
 ├── Makefile              ← Build automation
 └── README.md             ← Your project's documentation
 ```
 
 ---
 
-## LuaJIT vs. standard Lua 5.4
-
-The template defaults to **LuaJIT (OpenResty fork)**. LuaJIT's FFI library allows Lua to call C functions directly at near-zero overhead — a significant architectural advantage in this stack.
-
-To switch to standard Lua 5.4 (if your project has no need for FFI):
-
-```makefile
-# In Makefile:
-LUA_IMPL ?= lua54
-```
-
-If you use `ffi` in your Lua code, you cannot switch without rewriting those calls.
-
----
-
 ## Updating dependencies
 
 ```bash
-# See what has changed upstream
-workshop/scripts/check-versions.sh
-
-# Update VERSIONS to latest upstream releases
-workshop/scripts/update-versions.sh
-
-# Rebuild the base image after updating
+# Update Node.js or pnpm versions in VERSIONS
+# Then rebuild the base image:
 make build-base
+
+# Update npm packages:
+pnpm update
+# Review the diff, then commit pnpm-lock.yaml
 ```
 
-Commit `VERSIONS` after updating so all future container builds use the same versions.
+Commit `VERSIONS` and `pnpm-lock.yaml` after updating so all future container builds use the same versions.
