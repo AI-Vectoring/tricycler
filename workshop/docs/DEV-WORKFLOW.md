@@ -1,12 +1,18 @@
 # Development Workflow
 
-This document covers day-to-day development, testing, and incident response using the SelfCel three-container model.
+<!-- [Tricycler] This document covers the three-container development model.
+     The container names (dev/stage/prod/debug) and the workflow pattern are universal.
+     The specific commands (pnpm, next build, prisma) are [TS-Example]. -->
+
+This document covers day-to-day development, testing, and incident response using the tricycler three-container model.
 
 For initial project setup, see [GETTING-STARTED.md](GETTING-STARTED.md).
 
 ---
 
 ## The Three Containers
+
+<!-- [Tricycler] This table structure applies to every tricycler stack. The tools column is [TS-Example]. -->
 
 | Container | Build | Tools | User | When to use |
 |---|---|---|---|---|
@@ -18,6 +24,9 @@ For initial project setup, see [GETTING-STARTED.md](GETTING-STARTED.md).
 ---
 
 ## 1. Daily Development (dev container)
+
+<!-- [Tricycler] The dev container is managed by VS Code Dev Containers in every stack.
+     Source lives in a Docker volume — no local files. -->
 
 The dev container is managed by VS Code Dev Containers. Source code lives in a Docker volume cloned from GitHub — there are no local files involved.
 
@@ -32,6 +41,9 @@ You are now inside the container. The integrated terminal runs inside it.
 
 ### The development loop
 
+<!-- [TS-Example] make install = pnpm install. make dev-run = pnpm dev (Next.js hot reload).
+     Replace with your stack's install and run commands. -->
+
 ```bash
 # Install dependencies (first time, or after adding packages)
 make install
@@ -45,15 +57,21 @@ Changes to `src/` are reflected immediately — no restart needed.
 
 ### Adding a package
 
+<!-- [TS-Example] pnpm is the package manager for this stack. -->
+
 ```bash
 # Inside the dev container
 pnpm add <package-name>
 pnpm add -D <package-name>   # dev dependency
 ```
 
+<!-- [Think] Commit both package.json and pnpm-lock.yaml — the lockfile is what keeps builds reproducible. -->
+
 Commit both `package.json` and `pnpm-lock.yaml` — the lockfile is what keeps builds reproducible.
 
 ### Database changes
+
+<!-- [TS-Example] Prisma is the ORM for this stack. Replace with your stack's migration tool. -->
 
 ```bash
 # After editing prisma/schema.prisma
@@ -64,6 +82,8 @@ make db-generate   # regenerates the TypeScript client
 Migration files are generated in `prisma/migrations/` — commit them alongside the schema change.
 
 ### Committing
+
+<!-- [Think] Push before destroying the container — the Docker volume is ephemeral. -->
 
 ```bash
 git add -A
@@ -77,7 +97,11 @@ Push before destroying the container. The Docker volume is ephemeral.
 
 ## 2. Staging (stage container)
 
-Stage builds the same Next.js standalone output as production — identical `next build`, identical Node.js runtime. The only differences: the base image is `node:22-bookworm-slim` instead of Alpine, and test tools are available.
+<!-- [Tricycler] Stage = same build as prod, debuggable environment. This applies to every stack. -->
+
+Stage builds the same standalone output as production — identical build command, identical runtime. The only differences: the base image is slightly larger, and test tools are available.
+
+<!-- [TS-Example] node:22-bookworm-slim runtime, Next.js standalone output. -->
 
 ```bash
 # Build base image (first time, or after VERSIONS changes)
@@ -93,6 +117,8 @@ node server.js
 
 ### Integration testing
 
+<!-- [TS-Example] curl + jq for testing Next.js API routes. -->
+
 ```bash
 # Inside stage container — use curl and jq for API testing
 curl -s http://localhost:3000/api/health | jq .
@@ -102,6 +128,8 @@ curl -s http://localhost:3000/api/your-endpoint | jq .
 ---
 
 ## 3. Production (prod container)
+
+<!-- [Tricycler] --cap-drop=ALL and --security-opt no-new-privileges apply to every prod container. -->
 
 ```bash
 make build-base
@@ -116,6 +144,8 @@ docker run -d \
     my-app-prod
 ```
 
+<!-- [Tricycler] Prod has no shell — intentional. Use stage to investigate. -->
+
 There is no shell. `docker exec` into a running prod container will fail. This is intentional.
 
 Health status:
@@ -128,6 +158,9 @@ docker logs my-app   # health check output appears here
 ---
 
 ## 4. Forensics Workflow (debug container)
+
+<!-- [Tricycler] Debug = prod build + forensics tools + root. Applies to every stack. -->
+<!-- [TS-Example] Port 9229 is the Node.js inspector port. clinic/0x are Node.js profilers. -->
 
 When production behaves unexpectedly, see [DEBUGGING.md](DEBUGGING.md) for the full guide. Quick reference:
 
@@ -152,6 +185,9 @@ Connect Chrome DevTools to `localhost:9229` for breakpoints, heap snapshots, and
 
 ## 5. Version Management
 
+<!-- [TS-Example] NODE_VERSION and PNPM_VERSION are this stack's runtime versions.
+     Replace with your stack's equivalents in VERSIONS. -->
+
 Update Node.js or pnpm versions in `VERSIONS`, then rebuild:
 
 ```bash
@@ -172,6 +208,9 @@ pnpm update
 ---
 
 ## Makefile Reference
+
+<!-- [Tricycler] The five container targets are universal. -->
+<!-- [TS-Example] The app targets (install, dev-run, db-*) are Next.js + Prisma specific. -->
 
 ```bash
 # Container targets (run on host)

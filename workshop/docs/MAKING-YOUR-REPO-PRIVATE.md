@@ -1,8 +1,11 @@
 # Making Your Repository Private
 
+<!-- [Tricycler] This entire guide applies to every tricycler stack.
+     The Docker secret mechanism for injecting GITHUB_TOKEN is universal. -->
+
 Start with a public repo as described in [GETTING-STARTED.md](GETTING-STARTED.md). When you are ready to make it private, follow this guide.
 
-SelfCel projects start public by default — it's the simplest path. This guide covers converting to private when you're ready.
+tricycler projects start public by default — it's the simplest path. This guide covers converting to private when you're ready.
 
 ---
 
@@ -11,6 +14,10 @@ SelfCel projects start public by default — it's the simplest path. This guide 
 The dev container uses VS Code's GitHub authentication — no extra work there.
 
 The stage, prod, and debug containers clone your repository from scratch during `docker build`, without any VS Code session. For a private repo, Docker needs a token to authenticate that clone.
+
+<!-- [Think] The token is injected via Docker BuildKit secrets (--secret id=github_token).
+     This means the token is never baked into the image layer — it is only available
+     during the RUN step that performs the clone. Safe to push to a registry. -->
 
 ---
 
@@ -62,6 +69,9 @@ From this point, `make stage`, `make prod`, and `make debug` will use your token
 ---
 
 ## Token expiration
+
+<!-- [Think] Token rotation is the most common cause of broken builds in private repos.
+     Add a calendar reminder when you create the token. -->
 
 When your token expires:
 

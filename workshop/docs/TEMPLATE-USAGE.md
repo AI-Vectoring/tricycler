@@ -1,10 +1,15 @@
-# Using SelfCel as a Project Template
+# Using tricycler as a Project Template
 
-SelfCel is a starting point for self-hosted Next.js projects. Fork it, initialize it with your project name, and start building. The stack is already in place — your job is to direct.
+<!-- [Tricycler] This document explains how to go from template clone to running project.
+     Steps 1-3 are universal. The "where to build" section is [TS-Example]. -->
+
+tricycler is a starting point for self-hosted web projects. Fork it, initialize it with your project name, and start building. The container model is already in place — your job is to direct.
 
 ---
 
 ## Step 1 — Fork the template on GitHub
+
+<!-- [Tricycler] "Use this template" creates an independent copy — no shared history with the template. -->
 
 1. Go to [github.com/AI-Vectoring/tricycler](https://github.com/AI-Vectoring/tricycler)
 2. Click **"Use this template"** → **"Create a new repository"**
@@ -13,6 +18,9 @@ SelfCel is a starting point for self-hosted Next.js projects. Fork it, initializ
 ---
 
 ## Step 2 — Open in VS Code Dev Containers
+
+<!-- [Tricycler] Clone Repository in Container Volume is the standard Dev Containers workflow.
+     No local files — everything lives in the Docker volume. -->
 
 1. On your new GitHub repository page, click the green **"Code"** button and copy the HTTPS URL
 2. Open VS Code and press `Ctrl+Shift+P` → **Dev Containers: Clone Repository in Container Volume** — VS Code will ask you for the URL
@@ -32,6 +40,9 @@ It renames all references throughout the repo, commits, and pushes. Your project
 
 ## Step 3 — Install dependencies and start
 
+<!-- [TS-Example] make install = pnpm install. make dev-run = Next.js dev server.
+     Replace with your stack's commands. -->
+
 Inside the dev container terminal:
 
 ```bash
@@ -44,6 +55,9 @@ Your app is running at **http://localhost:3000**.
 ---
 
 ## Where to build your project
+
+<!-- [TS-Example] This entire section is Next.js + Prisma specific.
+     Replace with your stack's equivalent source structure and commands. -->
 
 ### Start in `src/app/` — always
 
@@ -74,6 +88,9 @@ Shared logic — database client, helper functions, constants — lives here. Th
 
 ## What to keep vs. what to replace
 
+<!-- [Tricycler] "Keep as-is" items are the tricycler pattern — they apply to every stack. -->
+<!-- [TS-Example] "Replace" items are specific to this Next.js/TypeScript implementation. -->
+
 ### Keep as-is
 
 | File | Why |
@@ -102,6 +119,9 @@ Shared logic — database client, helper functions, constants — lives here. Th
 
 ## Directory structure
 
+<!-- [TS-Example] This directory structure is specific to the Next.js + Prisma stack. -->
+<!-- [Tricycler] workshop/ is present in every tricycler stack. -->
+
 ```
 /
 ├── src/
@@ -117,7 +137,7 @@ Shared logic — database client, helper functions, constants — lives here. Th
 │   ├── health/           ← Health check contract
 │   └── docs/             ← This documentation
 ├── PROJECT.conf          ← Project name and repository URL
-├── VERSIONS              ← Pinned Node.js and pnpm versions
+├── VERSIONS              ← Pinned runtime versions
 ├── package.json          ← Dependencies and scripts
 ├── next.config.ts        ← Next.js configuration
 ├── tailwind.config.ts    ← Tailwind CSS configuration
@@ -130,6 +150,8 @@ Shared logic — database client, helper functions, constants — lives here. Th
 
 ## Updating dependencies
 
+<!-- [TS-Example] NODE_VERSION/PNPM_VERSION and pnpm-lock.yaml are this stack specific. -->
+
 ```bash
 # Update Node.js or pnpm versions in VERSIONS
 # Then rebuild the base image:
@@ -139,5 +161,8 @@ make build-base
 pnpm update
 # Review the diff, then commit pnpm-lock.yaml
 ```
+
+<!-- [Think] Commit VERSIONS and pnpm-lock.yaml after updating so all future container
+     builds use the same versions — not whatever happens to be latest at build time. -->
 
 Commit `VERSIONS` and `pnpm-lock.yaml` after updating so all future container builds use the same versions.

@@ -1,6 +1,11 @@
 # Testing Before Publishing
 
-This document describes the testing strategy for SelfCel container images before they are merged to main, pushed to GitHub, or published to a registry.
+<!-- [Tricycler] This testing strategy applies to every tricycler stack.
+     The rule (all tests pass before merge/push/publish) is universal. -->
+<!-- [TS-Example] The specific test suites (pnpm install, next build, psql, /api/health)
+     are Next.js + TypeScript specific. Replace them when building a different stack. -->
+
+This document describes the testing strategy for tricycler container images before they are merged to main, pushed to GitHub, or published to a registry.
 
 ---
 
@@ -21,6 +26,9 @@ The containers are the product. A broken image is a broken product. These tests 
 ---
 
 ## Test Suites
+
+<!-- [Tricycler] Three test suites mirror the three containers: dev, builder, compose. -->
+<!-- [TS-Example] The specific checks within each suite are stack specific. -->
 
 Each suite is an independent script. They can be run individually or all at once via `run-all.sh`.
 
@@ -48,6 +56,9 @@ bash workshop/tests/test-compose.sh
 
 All scripts must be run from the **repository root**.
 
+<!-- [Think] SKIP_BUILD=1 is useful during development but dangerous before publishing.
+     Always do a full rebuild before pushing to ensure images are current. -->
+
 Images are built automatically before testing. **Do not skip the build before publishing** — `SKIP_BUILD=1` tests whatever image is currently in Docker's cache, which may be stale if a Dockerfile was changed. Only use it when you are certain the image is up to date:
 ```bash
 # Safe: images were just built, no Dockerfile changes since
@@ -60,6 +71,8 @@ bash workshop/tests/run-all.sh
 ---
 
 ## Output Format
+
+<!-- [Tricycler] The colour-coded output format (pass/warn/fail + summary) is shared across all stacks. -->
 
 All scripts use consistent colour-coded output:
 
@@ -76,6 +89,8 @@ A summary at the end shows total passed/warned/failed counts and exits with code
 
 ### test-dev.sh
 
+<!-- [TS-Example] psql client and pnpm/tsc/next checks are specific to this stack. -->
+
 Tests the dev container image by running commands inside it:
 
 1. Node.js is present and reports the expected version
@@ -86,6 +101,8 @@ Tests the dev container image by running commands inside it:
 6. `next` CLI is accessible via pnpm
 
 ### test-builder.sh
+
+<!-- [TS-Example] pnpm install, next build, and .next/standalone are specific to this stack. -->
 
 Tests the builder-base image — the shared Node.js build environment:
 
@@ -99,6 +116,9 @@ Tests the builder-base image — the shared Node.js build environment:
 
 ### test-compose.sh
 
+<!-- [Tricycler] The compose test structure (start → ready → write → recreate → read) applies to every stack with a DB sidecar. -->
+<!-- [TS-Example] PostgreSQL is the database for this stack. -->
+
 Tests the docker-compose setup:
 
 1. `docker compose config` validates without errors
@@ -110,6 +130,8 @@ Tests the docker-compose setup:
 ---
 
 ## What Is NOT Tested Here
+
+<!-- [Tricycler] These gaps apply to every tricycler stack — manual verification required. -->
 
 These are out of scope for this test suite and require manual verification or a running application:
 
