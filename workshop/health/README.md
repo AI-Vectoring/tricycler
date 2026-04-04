@@ -2,7 +2,7 @@
 
 <!-- [Tricycler] Every prod container must expose a health check endpoint.
      Docker polls it to know whether to route traffic or restart the container.
-     The path, method, and response format below are the SelfCel convention. -->
+     The path, method, and response format below are the tricycler convention. -->
 
 ## Overview
 

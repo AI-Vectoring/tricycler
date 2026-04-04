@@ -27,10 +27,10 @@ fi
 # ── Prompt ───────────────────────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════╗"
-echo "║       SelfCel — First Run Setup              ║"
+echo "║       tricycler — First Run Setup              ║"
 echo "╚══════════════════════════════════════════════╝"
 echo ""
-echo "This is a fresh clone of the SelfCel template."
+echo "This is a fresh clone of the tricycler template."
 echo "Enter your project details to initialize the repo."
 echo ""
 
