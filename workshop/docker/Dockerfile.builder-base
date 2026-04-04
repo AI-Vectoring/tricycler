@@ -1,14 +1,14 @@
 # ==============================================================================
 # Dockerfile.builder-base — SHARED BUILD ENVIRONMENT
 # ==============================================================================
-# Produces an image containing:
-#   - Node.js 22 (LTS)
-#   - pnpm (fast, disk-efficient package manager)
+# [Tricycler] Every tricycler stack has a builder-base image.
+# It pre-installs your build toolchain so that deps/builder/prod stages
+# all start ready — no repeated installs across Dockerfile rebuilds.
 #
-# Why a builder-base at all?
-#   pnpm install is the expensive step. By pre-installing pnpm into a shared
-#   base image, all build stages (prod, stage, debug) start with it ready —
-#   no repeated apt/npm installs across Dockerfile rebuilds.
+# [TS-Example] This base is Node.js specific:
+#   - Base image:  node:22-bookworm-slim
+#   - Package mgr: pnpm
+# Replace both when building a different runtime stack.
 #
 # This image is NEVER deployed to production.
 # It is used as the FROM base for the builder stages in:
@@ -18,6 +18,8 @@
 # All other make targets depend on this one.
 # ==============================================================================
 
+# [TS-Example] Node.js LTS on Debian Bookworm Slim.
+# For another stack: python:3.12-slim, golang:1.22-bookworm, rust:1.78-slim, etc.
 FROM node:22-bookworm-slim
 
 ENV LANG=C.UTF-8 \
@@ -25,19 +27,21 @@ ENV LANG=C.UTF-8 \
     LANGUAGE=C.UTF-8 \
     TZ=UTC
 
-# git: required to clone the repo during the builder stage.
-# ca-certificates: required for HTTPS clones from GitHub.
+# [Tricycler] git + ca-certificates are always needed:
+# git clones the repo during the builder stage; ca-certificates enables HTTPS.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm globally via npm.
-# pnpm is preferred over npm for its speed and strict dependency isolation.
+# [TS-Example] pnpm is the package manager for this stack.
+# [Think] pnpm is preferred over npm for speed and strict dependency isolation.
 # Lockfile (pnpm-lock.yaml) ensures reproducible installs across all builds.
+# Replace with: pip, cargo, go mod, mix, etc. — whatever your stack uses.
 RUN npm install -g pnpm
 
-# Create appuser — mirrored across all containers so volume permissions match.
-# Also referenced in Dockerfile.prod runtime stage for USER resolution.
+# [Tricycler] appuser (UID 1000) is created in every container.
+# [Think] Consistent UID across all stages prevents volume permission mismatches
+# when files written in builder are read in the runtime stage.
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -M -s /sbin/nologin appuser

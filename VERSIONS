@@ -1,13 +1,19 @@
 # VERSIONS — Pinned dependency versions for all containers.
 #
-# Update these when you want to upgrade the runtime.
-# After updating, run: make build-base && make prod
+# [Tricycler] Every tricycler stack has a VERSIONS file.
+# Pin your runtime versions here — all containers build from the same source.
+# Update here → rebuild images → everything stays in sync.
+# Run: workshop/scripts/check-versions.sh to detect outdated packages.
+#      workshop/scripts/update-versions.sh to bump them interactively.
+#
+# [TS-Example] This stack pins Node.js and pnpm.
+# Replace with your stack's runtime versions: PYTHON_VERSION, GO_VERSION, etc.
 #
 # To check for new Node.js LTS releases: https://nodejs.org/en/about/previous-releases
 # To check for new pnpm releases:        https://github.com/pnpm/pnpm/releases
 
-# Node.js LTS version — used in all Dockerfiles as the base image tag.
+# [TS-Example] Node.js LTS version — used in all Dockerfiles as the base image tag.
 NODE_VERSION=22
 
-# pnpm version — installed globally in the builder-base image.
+# [TS-Example] pnpm version — installed globally in the builder-base image.
 PNPM_VERSION=9

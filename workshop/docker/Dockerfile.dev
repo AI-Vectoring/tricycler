@@ -1,8 +1,14 @@
 # ==============================================================================
 # Dockerfile.dev — DEVELOPMENT ENVIRONMENT
 # ==============================================================================
-# Base: node:22-bookworm (Debian 12, full) — best tool support for Node.js dev.
-# Goal: Fast iteration. TypeScript runs via ts-node/next dev. No compile step.
+# [Tricycler] The dev container is the only container developers work in.
+# It runs the app with hot reload (no rebuild needed on code change).
+# It contains the full toolchain — editors, debuggers, database clients.
+#
+# [TS-Example] This dev container is Node.js specific:
+#   - Base:   node:22-bookworm (full Debian — best tool support)
+#   - Tools:  pnpm, postgresql-client
+# Replace these when building a different runtime stack.
 #
 # Source: VS Code "Clone Repository in Container Volume" clones from GitHub
 #         directly into a Docker volume and mounts it into this container.
@@ -11,6 +17,8 @@
 # User: appuser (non-root) — mirrors production to catch permission bugs early.
 # ==============================================================================
 
+# [TS-Example] Full Debian base for maximum dev tool support.
+# For another stack: python:3.12-bookworm, golang:1.22-bookworm, etc.
 FROM node:22-bookworm
 
 ENV LANG=C.UTF-8 \
@@ -19,20 +27,22 @@ ENV LANG=C.UTF-8 \
     TZ=UTC
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    # Version control
+    # [Tricycler] Always needed: version control and HTTPS support
     git \
     ca-certificates \
     curl \
-    # Editors (lightweight, for quick edits inside the container)
+    # [Tricycler] Lightweight editors for quick edits inside the container
     vim \
     nano \
-    # PostgreSQL client — connect to external Postgres (sidecar or remote)
+    # [TS-Example] PostgreSQL client — connects to Postgres sidecar or remote DB.
+    # Replace with your stack's database client (mysql-client, redis-cli, etc.)
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Install pnpm globally
+# [TS-Example] pnpm package manager. Replace with your stack's equivalent.
 RUN npm install -g pnpm
 
+# [Tricycler] appuser mirrors production — catches permission bugs early.
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -m -s /bin/bash appuser
 
@@ -41,4 +51,7 @@ RUN chown -R appuser:appuser /app
 
 USER appuser
 
+# [Tricycler] Dev container drops to an interactive shell.
+# [Think] The process manager (pnpm dev / make dev-run) is started by the developer,
+# not baked into the image — keeps the workflow flexible and avoids auto-restart loops.
 ENTRYPOINT ["/bin/bash"]

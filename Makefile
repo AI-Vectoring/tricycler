@@ -1,5 +1,11 @@
 # tricycler Makefile
 #
+# [Tricycler] Five standard targets: build-base, dev, stage, prod, debug.
+# These map to the five Dockerfiles and are the same in every tricycler stack.
+#
+# [TS-Example] App-layer targets (install, dev-run, db-*) are Next.js + Prisma specific.
+# Replace them with your stack's equivalents when building a new stack.
+#
 # Container targets (run on host):
 #   make build-base   Build the shared Node.js builder image — run this first
 #   make dev          Build the dev container image
@@ -16,21 +22,23 @@
 # Utility:
 #   make clean        Remove .next/ and node_modules/
 #
-# Private repository support:
+# [Tricycler] Private repository support:
 #   Set GITHUB_TOKEN in your environment to clone from a private repo.
 #   GITHUB_TOKEN=ghp_xxxx make stage
 #   See workshop/docs/MAKING-YOUR-REPO-PRIVATE.md for setup instructions.
 
+# [Tricycler] PROJECT_NAME and REPO_URL come from PROJECT.conf.
+# VERSIONS provides NODE_VERSION and PNPM_VERSION.
 include PROJECT.conf
 include VERSIONS
 
-# Required for --mount=type=secret support in Dockerfiles.
+# [Tricycler] Required for --mount=type=secret support in Dockerfiles.
 export DOCKER_BUILDKIT := 1
 
 # GNU Make does not allow literal commas inside function calls.
 comma := ,
 
-# Pass --secret only when GITHUB_TOKEN is set. Public repos: leave unset.
+# [Tricycler] Pass --secret only when GITHUB_TOKEN is set. Public repos: leave unset.
 GITHUB_TOKEN  ?=
 _SECRET_FLAG   = $(if $(GITHUB_TOKEN),--secret id=github_token$(comma)env=GITHUB_TOKEN,)
 
@@ -39,6 +47,7 @@ _SECRET_FLAG   = $(if $(GITHUB_TOKEN),--secret id=github_token$(comma)env=GITHUB
 
 # ── Container image targets (host) ────────────────────────────────────────────
 
+# [Tricycler] build-base must run first — all other targets depend on it.
 build-base:
 	docker build \
 		--build-arg NODE_VERSION=$(NODE_VERSION) \
@@ -83,6 +92,8 @@ debug: build-base
 		.
 
 # ── App targets (inside dev container) ───────────────────────────────────────
+# [TS-Example] These targets are Next.js + Prisma specific.
+# Replace with your stack's install/run/migrate commands.
 
 # Install all dependencies from pnpm-lock.yaml.
 # Run this after cloning or after adding/removing a package.

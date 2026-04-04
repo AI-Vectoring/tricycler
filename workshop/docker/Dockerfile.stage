@@ -1,17 +1,20 @@
 # ==============================================================================
 # Dockerfile.stage — STAGING ENVIRONMENT
 # ==============================================================================
+# [Tricycler] Stage mirrors prod exactly: same build, same binary.
+# It adds shell and inspection tools that prod intentionally omits.
+#
 # Stage 1 (deps):    Installs production dependencies with frozen lockfile.
 #                    Identical to Dockerfile.prod — no shortcuts.
 #
-# Stage 2 (builder): Clones from GitHub, runs next build.
+# Stage 2 (builder): Clones from GitHub, runs the build command.
 #                    Identical build process to prod — same output, same flags.
 #
-# Stage 3 (runtime): node:22-bookworm-slim — slightly larger than alpine, but
-#                    gives you bash, curl, wget, and enough tooling to inspect
+# Stage 3 (runtime): Slightly larger than prod's alpine/scratch base, but
+#                    gives you bash, curl, wget, and tooling to inspect
 #                    a running app without leaving the container.
 #
-# Why not just use prod?
+# [Think] Why not just use prod for testing?
 #   Same binary, different environment. Stage lets you:
 #     - Run integration tests against the production build
 #     - Inspect headers, responses, and DB queries with real tools
@@ -32,6 +35,7 @@ FROM ${BASE_IMAGE} AS deps
 
 WORKDIR /build/deps
 
+# [TS-Example] pnpm lockfile + package.json. Replace with your stack's manifest files.
 # --frozen-lockfile: reproducible installs, fails if lockfile is out of sync.
 # --prod: skip devDependencies.
 COPY package.json pnpm-lock.yaml ./
@@ -40,10 +44,11 @@ RUN pnpm install --frozen-lockfile --prod
 # --- STAGE 2: BUILDER ---
 FROM ${BASE_IMAGE} AS builder
 
+# [Tricycler] REPO_URL and REPO_BRANCH are injected by the Makefile from PROJECT.conf.
 ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
-# Clone from GitHub. Injects GITHUB_TOKEN via Docker secret for private repos.
+# [Tricycler] Clone with optional GitHub token for private repos.
 # Public repos: leave GITHUB_TOKEN unset — the secret mount is a no-op.
 # See workshop/docs/MAKING-YOUR-REPO-PRIVATE.md for setup instructions.
 RUN --mount=type=secret,id=github_token \
@@ -57,9 +62,14 @@ RUN --mount=type=secret,id=github_token \
 
 WORKDIR /build/app
 COPY --from=deps /build/deps/node_modules ./node_modules
+
+# [TS-Example] `pnpm build` runs `next build`, producing .next/standalone/.
+# Replace with your stack's build command: `cargo build --release`, `go build`, etc.
 RUN pnpm build
 
 # --- STAGE 3: RUNTIME ---
+# [TS-Example] Bookworm-slim: enough for Node.js + inspection tools.
+# [Think] Prod uses alpine — stage trades a larger image size for debuggability.
 FROM node:22-bookworm-slim
 
 ENV NODE_ENV=production \
@@ -69,7 +79,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# Integration testing and inspection tools.
+# [Tricycler] Integration testing and inspection tools are always present in stage.
 # These are intentionally absent from prod — stage is where you investigate.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
@@ -85,7 +95,8 @@ RUN groupadd -g 1000 appuser && \
 
 WORKDIR /app
 
-# Same standalone output as prod — identical server, readable stack traces.
+# [TS-Example] Copy Next.js standalone output. Replace with your stack's artifacts.
+# [Think] standalone/ is self-contained — source and full node_modules stay in builder.
 COPY --from=builder /build/app/.next/standalone ./
 COPY --from=builder /build/app/.next/static ./.next/static
 COPY --from=builder /build/app/public ./public
@@ -96,6 +107,5 @@ USER appuser
 
 EXPOSE 3000
 
-# Drop into bash for manual inspection and testing.
-# Run the app with: node server.js
+# [Tricycler] Stage drops to bash — run the app manually: node server.js
 ENTRYPOINT ["/bin/bash"]

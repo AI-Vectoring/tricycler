@@ -1,7 +1,7 @@
 #!/bin/bash
 # rename.sh — First-run template initialization script.
 #
-# Fired automatically by .devcontainer/devcontainer.json postCreateCommand.
+# [Tricycler] Fired automatically by .devcontainer/devcontainer.json onCreateCommand.
 # Detects whether this is a fresh template clone and, if so, prompts for
 # project details then renames all references throughout the repo.
 #
@@ -9,11 +9,16 @@
 
 set -e
 
+# [TS-Example] These three values identify this specific template.
+# [Think] rename.sh uses these to detect "is this still an uninitialized clone?"
+# and to replace all occurrences in source files. If you fork tricycler under
+# a different user/name, update these three values to match.
 TEMPLATE_USER="AI-Vectoring"
 TEMPLATE_NAME="tricycler"
 TEMPLATE_REPO="https://github.com/AI-Vectoring/tricycler.git"
 
 # ── Check if already initialized ────────────────────────────────────────────
+# [Tricycler] Safe to re-run: exits immediately if PROJECT.conf no longer matches the template.
 if ! grep -q "GITHUB_USER=${TEMPLATE_USER}" PROJECT.conf 2>/dev/null; then
     echo "Project already initialized. Nothing to rename."
     exit 0
@@ -52,6 +57,8 @@ echo "Repository:   ${REPO_URL}"
 echo ""
 
 # ── Update PROJECT.conf ───────────────────────────────────────────────────────
+# [Tricycler] PROJECT.conf is the source of truth for PROJECT_NAME, GITHUB_USER, REPO_URL.
+# The Makefile reads it; the Dockerfiles receive it as build args.
 sed -i \
     -e "s|^PROJECT_NAME=.*|PROJECT_NAME=${PROJECT_NAME}|" \
     -e "s|^GITHUB_USER=.*|GITHUB_USER=${GITHUB_USER}|" \
@@ -59,7 +66,10 @@ sed -i \
     PROJECT.conf
 
 # ── Rename all references in known text files ─────────────────────────────────
-# Targets only committed file types — avoids binary files and .git directory.
+# [Tricycler] Targets only committed file types — avoids binary files and .git directory.
+# [TS-Example] The file extensions list covers this stack's file types.
+# [Think] If your stack has additional file types (e.g. *.py, *.go, *.ex),
+# add them to this list so references get renamed everywhere.
 find . -not -path './.git/*' -type f \( \
     -name "*.ts"       -o \
     -name "*.tsx"      -o \
@@ -83,6 +93,7 @@ find . -not -path './.git/*' -type f \( \
 done
 
 # ── Commit and push ───────────────────────────────────────────────────────────
+# [Tricycler] Commits the initialization so repo history shows the starting point.
 echo "Committing initialization..."
 git add -A
 git commit -m "chore: initialize project as ${PROJECT_NAME}"

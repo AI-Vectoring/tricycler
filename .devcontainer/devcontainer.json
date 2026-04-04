@@ -1,39 +1,52 @@
 {
+    // [Tricycler] devcontainer.json tells VS Code how to build and configure
+    // the development container. name, dockerfile path, and workspaceFolder
+    // are the core — everything else adapts to your stack.
     "name": "tricycler-dev",
     "build": {
+        // [Tricycler] Points to Dockerfile.dev in workshop/docker/
         "dockerfile": "../workshop/docker/Dockerfile.dev",
         "context": ".."
     },
+    // [Tricycler] /app is the standard workdir across all containers.
     "workspaceFolder": "/app",
+    // [Tricycler] appuser matches the non-root user in all containers.
     "remoteUser": "appuser",
     "remoteEnv": {
+        // [Tricycler] Passes your GitHub token into the container for private repo access.
         "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
     },
 
-    // Runs once on first container creation — detects a fresh template clone
-    // and runs the rename wizard if needed.
+    // [Tricycler] Runs rename.sh on first container creation.
+    // Detects a fresh template clone and runs the rename wizard if needed.
     "onCreateCommand": "bash workshop/scripts/rename.sh",
 
-    // Keep the container running when the VS Code window closes.
+    // [Tricycler] Keep the container running when the VS Code window closes.
+    // [Think] Without this, VS Code kills the container on disconnect — you lose your
+    // running dev server and any in-memory state.
     "shutdownAction": "none",
 
     "customizations": {
         "vscode": {
             "extensions": [
-                // TypeScript / Next.js
+                // [TS-Example] TypeScript / Next.js / Tailwind extensions.
+                // Replace with your stack's language and linting extensions.
                 "dbaeumer.vscode-eslint",
                 "esbenp.prettier-vscode",
                 "bradlc.vscode-tailwindcss",
-                // Prisma
+                // [TS-Example] Prisma schema highlighting and formatting.
                 "Prisma.prisma",
-                // Git
+                // [Tricycler] Git tooling — keep this in every stack.
                 "eamodio.gitlens"
             ],
             "settings": {
                 "terminal.integrated.defaultProfile.linux": "bash",
+                // [TS-Example] Format on save with Prettier — standard for TypeScript.
+                // Remove or replace for other languages.
                 "editor.formatOnSave": true,
                 "editor.defaultFormatter": "esbenp.prettier-vscode",
                 "files.trimTrailingWhitespace": true,
+                // [TS-Example] Prisma-specific formatter override.
                 "[prisma]": {
                     "editor.defaultFormatter": "Prisma.prisma"
                 }
@@ -41,10 +54,12 @@
         }
     },
 
-    // Next.js dev server + PostgreSQL sidecar
+    // [TS-Example] Port 3000: Next.js dev server. Port 5432: PostgreSQL sidecar.
+    // Replace with your stack's ports.
     "forwardPorts": [3000, 5432],
     "portsAttributes": {
         "3000": {
+            // [TS-Example] Opens browser automatically when the Next.js port becomes active.
             "label": "Next.js",
             "onAutoForward": "openBrowser"
         },

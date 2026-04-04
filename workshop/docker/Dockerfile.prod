@@ -1,24 +1,26 @@
 # ==============================================================================
 # Dockerfile.prod — PRODUCTION ENVIRONMENT
 # ==============================================================================
-# Three-stage build:
+# [Tricycler] Three-stage build: deps → builder → runtime.
+# Only the runtime stage is deployed — source code and build tools never reach prod.
 #
 # Stage 1 (deps):    Installs only production dependencies using a frozen
 #                    lockfile — same packages every time, no surprise upgrades.
 #
-# Stage 2 (builder): Clones from GitHub, copies deps in, runs `next build`.
-#                    Produces .next/standalone/ — a self-contained server with
-#                    only the runtime node_modules it actually needs.
-#                    No source code. No dev tools. No node_modules bloat.
+# Stage 2 (builder): Clones from GitHub, copies deps in, runs the build command.
+#                    Produces a self-contained server artifact.
+#                    No source code. No dev tools. No dependency bloat.
 #
-# Stage 3 (runtime): node:22-alpine — the smallest viable Node.js base (~50MB).
-#                    Contains only the standalone output, static assets, and
-#                    the public folder. Runs: node server.js
+# Stage 3 (runtime): The smallest viable base for your runtime.
 #
-# Why not scratch?
+# [TS-Example] This stack's runtime is Next.js standalone on node:22-alpine.
+#   - Build command: `pnpm build` → produces .next/standalone/
+#   - Runtime:       node:22-alpine (~50MB) — musl libc, minimal attack surface
+#   - Entrypoint:    node server.js
+#
+# [Think] Why not scratch?
 #   Unlike a static binary (cluar5-style), Next.js requires a Node.js runtime.
-#   Alpine is as lean as this stack allows — musl libc, no package manager,
-#   no shell by default. If it crashes, use the debug container.
+#   Alpine is as lean as this stack allows. If it crashes, use the debug container.
 #
 # See workshop/docs/DEV-WORKFLOW.md — "Forensics Workflow" section.
 #
@@ -33,6 +35,7 @@ FROM ${BASE_IMAGE} AS deps
 
 WORKDIR /build/deps
 
+# [TS-Example] pnpm manifests. Replace with your stack's dependency files.
 # Copy only the manifest files — avoids invalidating this layer when source changes.
 # --frozen-lockfile: fail if pnpm-lock.yaml is out of sync with package.json.
 # --prod: skip devDependencies — only what's needed at runtime.
@@ -42,10 +45,11 @@ RUN pnpm install --frozen-lockfile --prod
 # --- STAGE 2: BUILDER ---
 FROM ${BASE_IMAGE} AS builder
 
+# [Tricycler] REPO_URL and REPO_BRANCH injected from PROJECT.conf via Makefile.
 ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
-# Clone from GitHub. Injects GITHUB_TOKEN via Docker secret for private repos.
+# [Tricycler] Clone with optional GitHub token for private repos.
 # Public repos: leave GITHUB_TOKEN unset — the secret mount is a no-op.
 # See workshop/docs/MAKING-YOUR-REPO-PRIVATE.md for setup instructions.
 RUN --mount=type=secret,id=github_token \
@@ -62,12 +66,15 @@ WORKDIR /build/app
 # Copy production deps from the deps stage — avoids re-running pnpm install.
 COPY --from=deps /build/deps/node_modules ./node_modules
 
-# next build reads next.config.ts and produces .next/standalone/ because
-# output: 'standalone' is set. That folder is self-contained — it includes
-# a minimal node_modules with only what server.js needs at runtime.
+# [TS-Example] `pnpm build` runs `next build`, producing .next/standalone/.
+# [Think] output: 'standalone' in next.config.ts is what makes the output self-contained.
+# Replace with your stack's build command: `go build`, `cargo build --release`, etc.
 RUN pnpm build
 
 # --- STAGE 3: RUNTIME ---
+# [TS-Example] node:22-alpine — the smallest viable Node.js base (~50MB).
+# [Think] For a Go or Rust stack this could be scratch. For Python: python:3.12-alpine.
+# Node.js cannot run on scratch — it needs libc.
 FROM node:22-alpine
 
 ENV NODE_ENV=production \
@@ -77,18 +84,17 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# Alpine uses addgroup/adduser instead of groupadd/useradd.
+# [Tricycler] Non-root user in prod — mandatory.
+# [Think] Alpine uses addgroup/adduser instead of groupadd/useradd.
 # UID/GID 1000 mirrors builder-base and dev container — consistent permissions.
 RUN addgroup -g 1000 appuser && \
     adduser -u 1000 -G appuser -H -s /sbin/nologin -D appuser
 
 WORKDIR /app
 
-# Copy only what the standalone server needs to run:
-#   standalone/         — server.js + minimal node_modules
-#   .next/static/       — hashed JS/CSS chunks (served by Next.js)
-#   public/             — static files (images, fonts, favicon)
-# Everything else (source, full node_modules, build cache) stays in the builder.
+# [TS-Example] Copy only the Next.js standalone output.
+# Replace these paths with your stack's compiled artifacts.
+# [Think] Everything else (source, full node_modules, build cache) stays in the builder.
 COPY --from=builder /build/app/.next/standalone ./
 COPY --from=builder /build/app/.next/static ./.next/static
 COPY --from=builder /build/app/public ./public
@@ -99,9 +105,11 @@ USER appuser
 
 EXPOSE 3000
 
-# Health check hits /api/health — implement this endpoint in your app.
+# [Tricycler] Every prod container must have a health check.
+# [TS-Example] /api/health is a Next.js API route. Replace with your stack's endpoint.
 # See workshop/health/README.md for the contract.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD wget -qO- http://localhost:3000/api/health || exit 1
 
+# [TS-Example] Next.js standalone entrypoint. Replace with your stack's binary/command.
 ENTRYPOINT ["node", "server.js"]

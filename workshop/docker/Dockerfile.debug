@@ -1,22 +1,25 @@
 # ==============================================================================
 # Dockerfile.debug — FORENSICS / POST-INCIDENT ENVIRONMENT
 # ==============================================================================
+# [Tricycler] Debug mirrors prod exactly: same build, same binary.
+# It adds full profiling and system inspection tools, and runs as root.
+#
 # Stage 1 (deps):    Installs production dependencies with frozen lockfile.
-#                    Identical to Dockerfile.prod — no shortcuts.
 #
-# Stage 2 (builder): Clones from GitHub, runs next build.
-#                    Identical build process to prod — same output, same flags.
+# Stage 2 (builder): Clones from GitHub, runs the build command.
 #
-# Stage 3 (runtime): node:22-bookworm (full Debian) + Node.js forensics tools.
-#                    Includes clinic.js and 0x for performance profiling,
-#                    and curl/procps/lsof for system-level inspection.
+# Stage 3 (runtime): Full Debian base + forensics tools.
 #
-# User: ROOT — debugging requires full system access:
-#         attach to running processes, capture heap snapshots, read any memory.
+# [TS-Example] Node.js specific profiling tools: clinic.js and 0x.
+# Replace with your stack's profiler: py-spy (Python), pprof (Go), perf (C/Rust).
 #
 # Node inspector: start the app with --inspect=0.0.0.0:9229, then connect
 #   Chrome DevTools or VS Code to port 9229 for breakpoints and heap dumps.
 #   See workshop/docs/DEBUGGING.md for the full workflow.
+#
+# [Think] User is ROOT by design — debugging requires full system access:
+#   attach to running processes, capture heap snapshots, read any memory.
+#   To test as appuser: su - appuser
 #
 # Workflow: prod behaves unexpectedly → reproduce here → profile → fix.
 #
@@ -31,18 +34,18 @@ FROM ${BASE_IMAGE} AS deps
 
 WORKDIR /build/deps
 
+# [TS-Example] pnpm manifests. Replace with your stack's equivalent.
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 # --- STAGE 2: BUILDER ---
 FROM ${BASE_IMAGE} AS builder
 
+# [Tricycler] REPO_URL and REPO_BRANCH injected from PROJECT.conf via Makefile.
 ARG REPO_URL=https://github.com/AI-Vectoring/tricycler.git
 ARG REPO_BRANCH=main
 
-# Clone from GitHub. Injects GITHUB_TOKEN via Docker secret for private repos.
-# Public repos: leave GITHUB_TOKEN unset — the secret mount is a no-op.
-# See workshop/docs/MAKING-YOUR-REPO-PRIVATE.md for setup instructions.
+# [Tricycler] Clone with optional GitHub token for private repos.
 RUN --mount=type=secret,id=github_token \
     TOKEN=$(cat /run/secrets/github_token 2>/dev/null || true); \
     if [ -n "$TOKEN" ]; then \
@@ -54,9 +57,13 @@ RUN --mount=type=secret,id=github_token \
 
 WORKDIR /build/app
 COPY --from=deps /build/deps/node_modules ./node_modules
+
+# [TS-Example] Build command. Replace with your stack's equivalent.
 RUN pnpm build
 
 # --- STAGE 3: RUNTIME ---
+# [TS-Example] Full Debian (not slim) — best compatibility for forensics tools.
+# [Think] Slim images strip headers and libraries that profilers need. Use full base here.
 FROM node:22-bookworm
 
 ENV NODE_ENV=production \
@@ -66,8 +73,7 @@ ENV NODE_ENV=production \
     PORT=3000 \
     HOSTNAME=0.0.0.0
 
-# System inspection tools.
-# Full Debian base (not slim) — best compatibility for forensics tools.
+# [Tricycler] System inspection tools — always present in debug.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     # Network analysis
     curl \
@@ -86,25 +92,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     less \
     && rm -rf /var/lib/apt/lists/*
 
-# Node.js performance profiling tools.
+# [TS-Example] Node.js performance profiling tools.
 # clinic.js: doctor (bottleneck detection), flame (flame graphs), bubbleprof (async tracing).
 # 0x: single-command flame graph generator — simpler than clinic for quick sessions.
+# Replace with your stack's profiler: py-spy (Python), pprof (Go), perf (C/Rust).
 RUN npm install -g clinic 0x
 
-# appuser created for su / permission testing — mirrors prod user.
+# [Tricycler] appuser created for su / permission testing — mirrors prod user.
 RUN groupadd -g 1000 appuser && \
     useradd -u 1000 -g appuser -m -s /bin/bash appuser
 
 WORKDIR /debug
 
-# Same standalone output as prod — identical server, inspect the real thing.
+# [TS-Example] Next.js standalone output. Replace with your stack's artifacts.
 COPY --from=builder /build/app/.next/standalone ./
 COPY --from=builder /build/app/.next/static ./.next/static
 COPY --from=builder /build/app/public ./public
 
-# Node inspector port — attach Chrome DevTools or VS Code to this.
+# [Tricycler] Port 3000: app. [TS-Example] Port 9229: Node.js inspector protocol.
+# Replace 9229 with your stack's debugger port if different.
 EXPOSE 3000 9229
 
-# Root by design — attach profilers, capture heap dumps, read any process.
+# [Tricycler] Root by design — attach profilers, capture heap dumps, read any process.
 # To test as appuser: su - appuser
 ENTRYPOINT ["/bin/bash"]

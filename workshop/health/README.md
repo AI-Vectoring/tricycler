@@ -1,5 +1,9 @@
 # Health Check Contract
 
+<!-- [Tricycler] Every prod container must expose a health check endpoint.
+     Docker polls it to know whether to route traffic or restart the container.
+     The path, method, and response format below are the SelfCel convention. -->
+
 ## Overview
 
 The Docker `HEALTHCHECK` in `Dockerfile.prod` calls:
@@ -8,11 +12,17 @@ The Docker `HEALTHCHECK` in `Dockerfile.prod` calls:
 GET /api/health
 ```
 
+<!-- [TS-Example] /api/health is a Next.js API route (src/app/api/health/route.ts).
+     For another stack: a Go HTTP handler, a Flask route, a Rails controller action, etc.
+     The path can be anything — just keep it consistent with the HEALTHCHECK in Dockerfile.prod. -->
+
 This is a Next.js API route that returns HTTP 200 when the application is healthy. Docker reads the HTTP status code via `wget` — success means healthy, failure means unhealthy.
 
 ---
 
 ## Contract
+
+<!-- [Tricycler] This two-row contract is universal — keep it in every stack. -->
 
 | HTTP status | Body          | Meaning                  |
 |-------------|---------------|--------------------------|
@@ -22,6 +32,8 @@ This is a Next.js API route that returns HTTP 200 when the application is health
 ---
 
 ## Implementation Location
+
+<!-- [TS-Example] Next.js API route path. Replace with your stack's equivalent file. -->
 
 The health check route lives at:
 
@@ -34,6 +46,8 @@ The stub always returns healthy. Extend it as you add subsystems — database co
 ---
 
 ## Reference Implementation
+
+<!-- [TS-Example] TypeScript / Next.js. Replace with your stack's language and framework. -->
 
 ```typescript
 // src/app/api/health/route.ts
@@ -68,11 +82,18 @@ export async function GET() {
 }
 ```
 
+<!-- [Think] Keep checks lightweight — a simple ping, not a full integration test.
+     The health check must complete within the timeout set in Dockerfile.prod
+     or Docker marks the container as unhealthy and stops routing traffic to it. -->
+
 Keep checks lightweight — a simple ping, not a full integration test. The health check must complete in under 5 seconds or Docker marks it as failed.
 
 ---
 
 ## Timing
+
+<!-- [Tricycler] These four parameters exist in every stack's Dockerfile.prod HEALTHCHECK.
+     Tune start-period to match your app's actual startup time. -->
 
 The `HEALTHCHECK` in `Dockerfile.prod` is configured as:
 
@@ -81,6 +102,6 @@ The `HEALTHCHECK` in `Dockerfile.prod` is configured as:
 ```
 
 - Response must arrive in **under 5 seconds** or Docker marks it failed.
-- `--start-period=15s` gives Next.js time to initialize before checks begin.
+- `--start-period=15s` gives the app time to initialize before checks begin.
 
 Adjust these values in `Dockerfile.prod` to match your application's startup time.
