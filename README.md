@@ -1,4 +1,4 @@
-# SelfCel
+# tricycler
 
 **Your app. Your server. Your rules.**
 
@@ -90,8 +90,17 @@ docker run -d \
 - [TEMPLATE-USAGE.md](workshop/docs/TEMPLATE-USAGE.md) — What to keep, what to replace
 - [DEV-WORKFLOW.md](workshop/docs/DEV-WORKFLOW.md) — Day-to-day development and staging
 - [DEBUGGING.md](workshop/docs/DEBUGGING.md) — Node.js profiling and the debug container
-- [Philosophy-and-amazingness.md](workshop/docs/Philosophy-and-amazingness.md) — Why SelfCel exists
+- [Philosophy-and-amazingness.md](workshop/docs/Philosophy-and-amazingness.md) — Why tricycler exists
 - [CONTRIBUTING.md](workshop/docs/CONTRIBUTING.md) — How to contribute to the template
+
+---
+
+## Get listed!
+
+join tricycler-stack to give your stack some extra visibility. Simply add the `tricycler-stack` topic to your repo, takes <7 seconds...
+Step-by-step guide: [workshop/docs/REGISTRY.md](workshop/docs/REGISTRY.md)
+
+[github.com/topics/tricycler-stack](https://github.com/topics/tricycler-stack)
 
 ---
 
