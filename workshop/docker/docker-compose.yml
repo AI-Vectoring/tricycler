@@ -1,4 +1,4 @@
-# docker-compose.yml — Development services for SelfCel projects.
+# docker-compose.yml — Development services for tricycler projects.
 #
 # Usage:
 #   docker compose up           # start all enabled services
