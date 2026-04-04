@@ -58,7 +58,7 @@ See [workshop/docs/GETTING-STARTED.md](workshop/docs/GETTING-STARTED.md) for the
 ├── .devcontainer/        ← VS Code Dev Containers configuration
 ├── workshop/
 │   ├── docker/           ← All Dockerfiles
-│   ├── scripts/          ← rename.sh, version management
+│   ├── scripts/          ← templateInit.sh, version management
 │   ├── health/           ← Health check contract
 │   └── docs/             ← Full documentation
 ├── PROJECT.conf          ← Project name and repository URL

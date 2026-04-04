@@ -17,9 +17,9 @@
         "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
     },
 
-    // [Tricycler] Runs rename.sh on first container creation.
+    // [Tricycler] Runs templateInit.sh on first container creation.
     // Detects a fresh template clone and runs the rename wizard if needed.
-    "onCreateCommand": "bash workshop/scripts/rename.sh",
+    "onCreateCommand": "bash workshop/scripts/templateInit.sh",
 
     // [Tricycler] Keep the container running when the VS Code window closes.
     // [Think] Without this, VS Code kills the container on disconnect — you lose your
